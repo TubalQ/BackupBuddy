@@ -2,6 +2,9 @@
 
 BackupBuddy is a Python-based backup and restore tool using rclone and pigz, designed for simplicity and flexibility. It supports compression, file splitting, and integration with popular cloud storage providers via rclone.
 
+rclone for cloud storage
+pigz for enabling more cores during compression for better performance
+
 BackupBuddy is tested in Proxmox VE, Proxmox BS, Ubuntu and Parrot OS so far.
 
 # Features
