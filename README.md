@@ -29,6 +29,10 @@ pigz for fast compression (optional)
 
 You may need to manually install "sudo" on Proxmox
 
+If running in an LXC, you may need to run 
+    
+    apt install rclone
+
 # Steps
 
 Clone the repository:
