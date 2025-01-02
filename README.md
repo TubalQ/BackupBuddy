@@ -86,7 +86,7 @@ BackupBuddy will restore files to the same location you backed them up from.
 If you want to add the generated scripts to a backjob, you should find the scripts in /root/backup_scripts/backup_examplename
 
 
-Contributing
+# Contributing
 
 Contributions are welcome! Please open an issue or submit a pull request for any enhancements or bug fixes.
 License
