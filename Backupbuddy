@@ -1,0 +1,308 @@
+#!/usr/bin/env python3
+
+import os
+import subprocess
+import json
+import shutil
+
+CONFIG_FILE = os.path.expanduser("~/.backup_tool_jobs.json")
+SCRIPT_DIR = os.path.expanduser("~/backup_scripts/")
+TEMP_DIR = "/var/tmp/backupbuddy_temp"
+
+
+def prepare_temp_directory():
+    """Create a dedicated temporary directory for backups."""
+    if not os.path.exists(TEMP_DIR):
+        os.makedirs(TEMP_DIR, exist_ok=True)
+    os.chmod(TEMP_DIR, 0o777)
+
+
+def load_config():
+    """Load configuration data from the JSON file."""
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r") as file:
+            return json.load(file)
+    return {}
+
+
+def save_config(config):
+    """Save configuration data to the JSON file."""
+    with open(CONFIG_FILE, "w") as file:
+        json.dump(config, file, indent=4)
+
+
+def list_jobs(config):
+    """List all backup jobs."""
+    if not config:
+        print("No backup jobs found.")
+        return
+    print("\nConfigured backup jobs:")
+    for i, job in enumerate(config.keys(), start=1):
+        print(f"{i}. Source: {config[job]['source_dir']}, Destination: {config[job]['destination']}, "
+              f"Compressed: {config[job]['compress']}, Split: {config[job]['split_files']}")
+
+
+def check_and_install_dependencies():
+    """Check and install necessary dependencies."""
+    dependencies = {
+        "python3": "sudo apt update && sudo apt install python3 -y",
+        "pip3": "sudo apt install python3-pip -y",
+        "rclone": "curl https://rclone.org/install.sh | sudo bash",
+        "pigz": "sudo apt install pigz -y"
+    }
+    for tool, install_cmd in dependencies.items():
+        if not shutil.which(tool):
+            print(f"{tool} is missing. Installing...")
+            subprocess.run(install_cmd, shell=True, check=True)
+
+
+def list_remotes():
+    """List configured rclone remotes."""
+    try:
+        result = subprocess.run("rclone listremotes", shell=True, text=True, capture_output=True, check=True)
+        remotes = result.stdout.strip().splitlines()
+        if remotes:
+            print("\nAvailable remotes:")
+            for i, remote in enumerate(remotes, start=1):
+                print(f"{i}. {remote}")
+            return remotes
+        else:
+            print("No remotes found. Please configure a remote first.")
+            subprocess.run("rclone config", shell=True)
+            return list_remotes()
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to retrieve remotes: {e}")
+        return []
+
+
+def select_remote():
+    """Select a remote from the list or configure a new one."""
+    remotes = list_remotes()
+    print("\nAvailable remotes:")
+    for i, remote in enumerate(remotes, start=1):
+        print(f"{i}. {remote}")
+    print("0. Configure a new remote")
+
+    while True:
+        try:
+            choice = input("Enter the number of the remote to use (or 'b' to go back): ").strip()
+            if choice.lower() == "b":
+                return "b"
+            choice = int(choice)
+            if choice == 0:
+                print("\nStarting rclone configuration...")
+                subprocess.run("rclone config", shell=True)
+                remotes = list_remotes()
+            elif 1 <= choice <= len(remotes):
+                return remotes[choice - 1]
+            else:
+                print("Invalid choice. Try again.")
+        except ValueError:
+            print("Invalid input. Enter a number.")
+
+
+def generate_backup_script(config, job_id):
+    job = config[job_id]
+    script_path = os.path.join(SCRIPT_DIR, f"backup_{job_id}.sh")
+    os.makedirs(SCRIPT_DIR, exist_ok=True)
+    with open(script_path, "w") as script:
+        script.write("#!/bin/bash\n")
+        script.write("set -e\n")
+        script.write(f"echo 'Starting backup of {job['source_dir']} to {job['destination']}'\n")
+        
+        if job["compress"]:
+            script.write("echo 'Compressing files...'\n")
+            script.write(f"tar -cf - -C {os.path.dirname(job['source_dir'])} {os.path.basename(job['source_dir'])} | pigz -{job['compression_level']} > {TEMP_DIR}/backup.tar.gz\n")
+            if job["split_files"]:
+                script.write(f"split -b {job['split_size']} {TEMP_DIR}/backup.tar.gz {TEMP_DIR}/backup-part-\n")
+                script.write(f"rm {TEMP_DIR}/backup.tar.gz\n")
+            script.write(f"rclone copy {TEMP_DIR}/ {job['destination']} --log-level INFO\n")
+        elif job["split_files"]:
+            script.write("echo 'Splitting files without compression...'\n")
+            script.write(f"tar -cf {TEMP_DIR}/backup.tar -C {os.path.dirname(job['source_dir'])} {os.path.basename(job['source_dir'])}\n")
+            script.write(f"split -b {job['split_size']} {TEMP_DIR}/backup.tar {TEMP_DIR}/backup-part-\n")
+            script.write(f"rm {TEMP_DIR}/backup.tar\n")
+            script.write(f"rclone copy {TEMP_DIR}/ {job['destination']} --log-level INFO\n")
+        else:
+            script.write("echo 'Copying files without compression or splitting...'\n")
+            script.write(f"rclone copy {job['source_dir']} {job['destination']} --log-level INFO\n")
+        
+        script.write(f"rm -rf {TEMP_DIR}/*\n")
+        script.write("echo 'Backup completed.'\n")
+    os.chmod(script_path, 0o755)
+    return script_path
+
+
+def generate_restore_script(config, job_id):
+    job = config[job_id]
+    target_dir = job["source_dir"]
+    script_path = os.path.join(SCRIPT_DIR, f"restore_{job_id}.sh")
+    os.makedirs(SCRIPT_DIR, exist_ok=True)
+    with open(script_path, "w") as script:
+        script.write("#!/bin/bash\n")
+        script.write("set -e\n")
+        script.write(f"echo 'Restoring files from {job['destination']} to {target_dir}'\n")
+        script.write(f"rclone copy {job['destination']} {TEMP_DIR} --log-level INFO\n")
+        if job["split_files"]:
+            script.write("echo 'Reassembling split files...'\n")
+            script.write(f"cat {TEMP_DIR}/backup-part-* > {TEMP_DIR}/combined_backup.tar.gz\n")
+            script.write(f"rm {TEMP_DIR}/backup-part-*\n")
+        if job["compress"]:
+            script.write("echo 'Extracting compressed files...'\n")
+            script.write(f"mkdir -p {target_dir}\n")
+            script.write(f"tar --strip-components=1 --preserve-permissions --same-owner -xzf {TEMP_DIR}/combined_backup.tar.gz -C {target_dir}\n")
+            script.write(f"rm {TEMP_DIR}/combined_backup.tar.gz\n")
+        else:
+            script.write("echo 'Copying uncompressed files...'\n")
+            script.write(f"cp -r {TEMP_DIR}/* {target_dir}/\n")
+        script.write(f"rm -rf {TEMP_DIR}/*\n")
+        script.write("echo 'Restore completed.'\n")
+    os.chmod(script_path, 0o755)
+    return script_path
+
+
+def clear_configurations():
+    """Clear configurations: Remotes or Backup jobs."""
+    print("\nWhat do you want to clear?")
+    print("1. Clear all remotes (rclone config)")
+    print("2. Clear all backup jobs")
+    print("3. Cancel")
+    choice = input("Enter your choice (1/2/3): ").strip()
+
+    if choice == "1":
+        print("\nClearing all remotes using rclone config...")
+        subprocess.run("rclone config", shell=True)
+        print("Remotes cleared. You can now configure new remotes.")
+    elif choice == "2":
+        if os.path.exists(CONFIG_FILE):
+            os.remove(CONFIG_FILE)
+            print(f"Backup jobs cleared. The file {CONFIG_FILE} has been removed.")
+        else:
+            print("No backup jobs found to clear.")
+    elif choice == "3":
+        print("Clearing canceled.")
+    else:
+        print("Invalid choice. Try again.")
+
+
+def main():
+    """Main program to handle backup and restore operations."""
+    print("\n========================================")
+    print("Welcome to BackupBuddy!")
+    print("Let's back up your files and keep them safe.")
+    print("========================================\n")
+
+    while True:
+        prepare_temp_directory()
+        check_and_install_dependencies()
+
+        config = load_config()
+        list_jobs(config)
+
+        print("\nWhat would you like to do:")
+        print("1. Create a new backup job")
+        print("2. Restore from an existing backup job")
+        print("3. Clear configurations")
+        print("4. Exit")
+        choice = input("Enter your choice (1/2/3/4): ").strip()
+
+        if choice == "1":
+            create_backup_job(config)
+        elif choice == "2":
+            restore_backup_job(config)
+        elif choice == "3":
+            clear_configurations()
+        elif choice == "4":
+            print("Goodbye! Thanks for using BackupBuddy.")
+            break
+        else:
+            print("Invalid choice. Try again.")
+
+
+def create_backup_job(config):
+    """Guide user through creating a new backup job."""
+    while True:
+        print("\nCreating a new backup job. (Enter 'b' to go back at any step)")
+        job_id = input("Enter a unique ID for the backup job: ").strip()
+        if job_id.lower() == "b":
+            return
+        source_dir = input("Enter the path to the directory to back up: ").strip()
+        if source_dir.lower() == "b":
+            return
+
+        print("\nSelect a remote destination:")
+        remote = select_remote()
+        if remote == "b":
+            return
+        destination = input("Enter the path on the remote (e.g., backups/): ").strip()
+        if destination.lower() == "b":
+            return
+
+        compress = input("Do you want to compress files? (yes/no): ").strip().lower()
+        if compress == "b":
+            return
+        compress = compress == "yes"
+
+        compression_level = None
+        if compress:
+            compression_level = input("Enter compression level (1=low, 9=high): ").strip()
+            if compression_level.lower() == "b":
+                return
+
+        split_files = input("Do you want to split files? (yes/no): ").strip().lower()
+        if split_files == "b":
+            return
+        split_files = split_files == "yes"
+
+        split_size = None
+        if split_files:
+            split_size = input("Enter maximum size per part (e.g., 10G): ").strip()
+            if split_size.lower() == "b":
+                return
+
+        config[job_id] = {
+            "source_dir": source_dir,
+            "destination": f"{remote}{destination}",
+            "compress": compress,
+            "compression_level": compression_level,
+            "split_files": split_files,
+            "split_size": split_size
+        }
+        save_config(config)
+
+        script_path = generate_backup_script(config, job_id)
+        print(f"Backup script generated: {script_path}")
+        subprocess.run(script_path, shell=True)
+        return
+
+
+def restore_backup_job(config):
+    """Guide user through restoring a backup job."""
+    while True:
+        if not config:
+            print("No backup jobs are configured. Create a backup job first.")
+            return
+
+        print("\nAvailable backup jobs: (Enter 'b' to go back)")
+        for i, job_id in enumerate(config.keys(), start=1):
+            print(f"{i}. {job_id}")
+        selected_job = input("Select a job to restore from: ").strip()
+        if selected_job.lower() == "b":
+            return
+
+        try:
+            selected_job = int(selected_job) - 1
+            if selected_job < 0 or selected_job >= len(config):
+                print("Invalid choice. Try again.")
+                continue
+            job_id = list(config.keys())[selected_job]
+            script_path = generate_restore_script(config, job_id)
+            print(f"Restore script generated: {script_path}")
+            subprocess.run(script_path, shell=True)
+            return
+        except ValueError:
+            print("Invalid input. Enter a number.")
+
+
+if __name__ == "__main__":
+    main()
