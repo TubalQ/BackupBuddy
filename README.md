@@ -69,14 +69,14 @@ You can remove:
 All remotes configured with rclone.
 All existing backup jobs.
 
-# Example Commands (BackupBuddy needs sudo))
+# Commands (BackupBuddy needs sudo))
 
     sudo ./BackupBuddy
 
 # Example Backup
 
 Backing up /home/user/documents to "your-name-for-your-cloud":/backups/documents.
-Compressing files with level up to6.
+Compressing files with level up to 6.
 Splitting files into 5GB parts. (you can choose freely from MB to TB)
 
 # Example Restore
