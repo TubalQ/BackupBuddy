@@ -1,8 +1,8 @@
 # BackupBuddy
 
-BackupBuddy is a Python-based backup and restore tool designed for simplicity and flexibility. It supports compression, file splitting, and integration with popular cloud storage providers via rclone.
+BackupBuddy is a Python-based backup and restore tool using rclone and pigz, designed for simplicity and flexibility. It supports compression, file splitting, and integration with popular cloud storage providers via rclone.
 
-BackupBuddy is tested in Ubuntu and Parrot OS so far.
+BackupBuddy is tested in Proxmox VE, Proxmox BS, Ubuntu and Parrot OS so far.
 
 # Features
 
@@ -76,19 +76,21 @@ All existing backup jobs.
 # Example Backup
 
 Backing up /home/user/documents to "your-name-for-your-cloud":/backups/documents.
-Compressing files with level up to 6.
-Splitting files into 5GB parts. (you can choose freely from MB to TB)
+Compressing files with level up to 9.
+Splitting files into 5GB parts. (you can choose freely from 1MB to 99TB)
 
 # Example Restore
 BackupBuddy will restore files to the same location you backed them up from.
 
 # Cronjonbs
+Im working on integrating cron jobs from the menu.
 If you want to add the generated scripts to a backjob, you should find the scripts in /root/backup_scripts/backup_examplename
 
 
 # Contributing
 
 Contributions are welcome! Please open an issue or submit a pull request for any enhancements or bug fixes.
-License
+
+# License
 
 This project is licensed under the MIT License. See the LICENSE file for details.
