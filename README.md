@@ -47,9 +47,12 @@ Main Menu
 When you run the program, you'll see with the following options:
 
 Create a New Backup Job: Configure and start a new backup job.
+
 Restore from an Existing Backup Job: Restore files from a previously configured job.
 Clear Configurations: Remove existing backup jobs or remotes.
+
 Exit: Exit the program.
+
 # Yes & No questions needs to be answered with "yes" or "no", not "y" or "n"
 
 # Creating a Backup Job
