@@ -29,7 +29,8 @@ pigz for fast compression (optional)
 
 You may need to manually install "sudo" on Proxmox
 
-If running in an LXC, you may need to run 
+If you're getting: Failed to retrieve remotes: Command 'rclone listremotes' returned non-zero exit status 127.
+   Run: 
     
     apt install rclone
 
