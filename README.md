@@ -47,7 +47,7 @@ Make the program executable:
 
 Run the program:
 
-    ./BackupBuddy
+    sudo ./BackupBuddy
 
 # Usage
 Main Menu
