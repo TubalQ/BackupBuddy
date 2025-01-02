@@ -24,7 +24,9 @@ Ensure the following are installed on your system:
 
 Python 3.x
 rclone for cloud storage integration
+
 pigz for fast compression (optional)
+
 You may need to manually install "sudo" on Proxmox
 
 # Steps
