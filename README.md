@@ -1,4 +1,4 @@
-#BackupBuddy
+# BackupBuddy
 
 BackupBuddy is a flexible and interactive tool designed to simplify your backup needs, both locally and remotely via rclone. It’s built to make backup and restoration processes intuitive and user-friendly.
 Features
@@ -7,37 +7,37 @@ Interactive Directory Navigation
    Local Directories: Navigate, select, or create directories directly from the menu.
    Remote Directories (via rclone): Browse, select, or create directories on remote locations without manual commands.
 
-###Visual Enhancements
+### Visual Enhancements
 
    Color Coding:
       Directories and files are highlighted with distinct colors for improved readability.
       The current directory is clearly displayed at the bottom of the menu.
    File Limitation: Displays up to three files per directory and indicates with [...] if more files are present.
 
-###Improved Directory Management
+### Improved Directory Management
 
    Automatic Directory Creation: Create new directories locally or remotely directly from the menu.
    Immediate Usage: Newly created directories are instantly ready for uploads or backups.
    Fail-Safe Handling: Prevents errors when directories are empty or paths are invalid.
 
-###Remote Server Management
+### Remote Server Management
 
    Manage Remotes: Add, view, and manage your rclone remotes directly from BackupBuddy.
    Multi-Remote Support: Seamlessly works with multiple cloud providers via rclone.
 
-###Customizable Backups
+### Customizable Backups
 
    Compression and Splitting:
       Compress files with adjustable compression levels.
       Split large files into smaller chunks for easier handling.
    CPU Optimization: Configure the number of CPU cores used for compression tasks.
 
-###Restoration and Scheduling#
+### Restoration and Scheduling#
 
    Restoration Mode: Restore backups as easily as creating them.
    Cron Integration: Schedule automatic backups directly from BackupBuddy.
 
-###Installation
+### Installation
 Requirements
 BackupBuddy should install these for you.
 
@@ -46,11 +46,11 @@ BackupBuddy should install these for you.
 
     curl https://rclone.org/install.sh | sudo bash
 
-###Required packages for Ubuntu/Debian:
+### Required packages for Ubuntu/Debian:
 
     sudo apt install pigz tar pv cron -y
 
-###Usage
+### Usage
 
    Run BackupBuddy(BackupBuddy needs sudo or root):
 
@@ -62,9 +62,9 @@ BackupBuddy should install these for you.
         Manage remotes and local shortcuts.
 
 
-###Local Directories
+### Local Directories
 
-####Current local directory: /home/user
+#### Current local directory: /home/user
 
 Directories:
 1. Documents
@@ -80,7 +80,7 @@ d. Create a new directory
 
 Current remote directory: ProtonDrive:/backups
 
-####Remote Directories:
+#### Remote Directories:
 1. directory1
 2. directory2
 
@@ -91,20 +91,20 @@ d. Create a new directory
 
 
 
-####Contributing
+#### Contributing
 
    Fork this repository.
    Create a branch for your changes:
 
     git checkout -b feature/my-feature
 
-####Make your changes and commit:
+#### Make your changes and commit:
 
     git commit -m "Description of your changes"
 
     Submit a pull request for review.
 
-##License
+## License
 
 BackupBuddy is licensed under the MIT License. See LICENSE for more details.
 
