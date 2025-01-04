@@ -42,13 +42,10 @@ Requirements
 BackupBuddy should install these for you.
 
  Python 3.7 or later.
- rclone: Install rclone using:
+ Install using:
 
-    curl https://rclone.org/install.sh | sudo bash
-
-### Required packages for Ubuntu/Debian:
-
-    sudo apt install pigz tar pv cron -y
+    git clone https://github.com/TubalQ/BackupBuddy.git
+    
 
 ### Usage
 
