@@ -58,7 +58,7 @@ BackupBuddy should install these for you.
         Restore an existing backup.
         Manage remotes and local shortcuts.
 
-####You need to answer "yes" or "no", and not "y" or "n".
+#### You need to answer "yes" or "no", and not "y" or "n".
 
 ### Local Directories
 
