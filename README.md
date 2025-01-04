@@ -1,110 +1,121 @@
-# BackupBuddy
+#BackupBuddy#
 
-BackupBuddy is a Python-based backup and restore tool using rclone and pigz, designed for simplicity and flexibility. It supports compression, file splitting, and integration with popular cloud storage providers via rclone.
+BackupBuddy is a flexible and interactive tool designed to simplify your backup needs, both locally and remotely via rclone. It’s built to make backup and restoration processes intuitive and user-friendly.
+Features
+Interactive Directory Navigation
 
-rclone for cloud storage
-pigz for enabling more cores during compression for better performance
+   Local Directories: Navigate, select, or create directories directly from the menu.
+   Remote Directories (via rclone): Browse, select, or create directories on remote locations without manual commands.
 
-BackupBuddy is tested in Proxmox VE, Proxmox BS, Ubuntu and Parrot OS so far.
+Visual Enhancements
 
-# Features
+   Color Coding:
+      Directories and files are highlighted with distinct colors for improved readability.
+      The current directory is clearly displayed at the bottom of the menu.
+   File Limitation: Displays up to three files per directory and indicates with [...] if more files are present.
 
-Backup and Restore: Easily back up and restore your files and directories.
-Compression: Reduce backup size with customizable compression levels.
-File Splitting: Split large backups into smaller parts for easier upload.
-Cloud Integration: Seamlessly integrate with cloud storage providers like Google Drive, S3, ProtonDrive, and more via rclone.
-User-Friendly: Interactive CLI interface with options to configure backups step-by-step.
-Custom Scripts: Generates reusable backup and restore scripts.
+#Improved Directory Management#
 
-# Installation
-Prerequisites
+   Automatic Directory Creation: Create new directories locally or remotely directly from the menu.
+   Immediate Usage: Newly created directories are instantly ready for uploads or backups.
+   Fail-Safe Handling: Prevents errors when directories are empty or paths are invalid.
 
-Ensure the following are installed on your system:
-(BackupBuddy should install it if you dont have theese)
+#Remote Server Management#
 
-Python 3.x
-rclone for cloud storage integration
+   Manage Remotes: Add, view, and manage your rclone remotes directly from BackupBuddy.
+   Multi-Remote Support: Seamlessly works with multiple cloud providers via rclone.
 
-pigz for fast compression (optional)
+#Customizable Backups#
 
-You may need to manually install "sudo" on Proxmox
+   Compression and Splitting:
+      Compress files with adjustable compression levels.
+      Split large files into smaller chunks for easier handling.
+   CPU Optimization: Configure the number of CPU cores used for compression tasks.
 
-If you're installing on an unprivileged LXC and you're getting: Failed to retrieve remotes: Command 'rclone listremotes' returned non-zero exit status 127.
-   Run: 
-    
-    apt install rclone
+#Restoration and Scheduling#
 
-# Steps
+   Restoration Mode: Restore backups as easily as creating them.
+   Cron Integration: Schedule automatic backups directly from BackupBuddy.
 
-Clone the repository:
+Installation
+Requirements
 
-    git clone https://github.com/TubalQ/BackupBuddy.git
-    cd ~/BackupBuddy
+   Python 3.7 or later.
+ rclone: Install rclone using:
 
-Make the program executable:
+curl https://rclone.org/install.sh | sudo bash
 
-    chmod +x BackupBuddy
+Required packages for Ubuntu/Debian:
 
-Run the program:
+    sudo apt install pigz tar pv cron -y
 
-    sudo ./BackupBuddy
+Usage
 
-# Usage
-Main Menu
+    Run BackupBuddy:
 
-When you run the program, you'll see with the following options:
+    ./backupbuddy
 
-Create a New Backup Job: Configure and start a new backup job.
+    Follow the interactive menu options to:
+        Create a new backup.
+        Restore an existing backup.
+        Manage remotes and local shortcuts.
 
-Restore from an Existing Backup Job: Restore files from a previously configured job.
-Clear Configurations: Remove existing backup jobs or remotes.
+Screenshots (Examples)
+Local Directories
 
-Exit: Exit the program.
+Current local directory: /home/user
 
-# Yes & No questions needs to be answered with "yes" or "no", not "y" or "n"
+Directories:
+1. Documents
+2. Downloads
+3. Pictures
 
-# Creating a Backup Job
+0. Select this location
+b. Go back
+c. Enter a custom local directory path
+d. Create a new directory
 
-Provide a unique ID for the job.
-Enter the source directory to back up.
-Select a remote destination from existing remotes or configure a new one.
-Choose whether to compress files and set the compression level.
-Decide if files should be split and specify the maximum part size.
+Remote Directories
 
-# Restoring a Backup
+Current remote directory: ProtonDrive:/backups
 
-Select the backup job you want to restore.
-Files will be restored to the same directory from which they were backed up.
+Remote Directories:
+1. daily
+2. weekly
 
-Clearing Configurations (this will only clear the info in the cli, it will not remove the generated files in /root/backup_scripts)
+0. Select this location
+b. Go back
+c. Enter a custom remote directory path
+d. Create a new directory
 
-You can remove:
+Common Issues and Solutions
+1. Error: "Cannot pull with rebase"
 
-All remotes configured with rclone.
-All existing backup jobs.
+Solution:
 
-# Commands (BackupBuddy needs sudo))
+    Ensure all local changes are committed or stashed before running git pull.
 
-    sudo ./BackupBuddy
+2. Error: "rclone not found"
 
-# Example Backup
+Solution:
 
-Backing up /home/user/documents to "your-name-for-your-cloud":/backups/documents.
-Compressing files with level up to 9.
-Splitting files into 5GB parts. (you can choose freely from 1MB to 99TB)
+    Verify that rclone is installed correctly and accessible in your system's PATH.
 
-# Example Restore
-BackupBuddy will restore files to the same location you backed them up from.
+Contributing
 
-# Cronjonbs
-Im working on integrating cron jobs from the menu.
-If you want to add the generated scripts to a backjob, you should find the scripts in /root/backup_scripts/backup_examplename
+    Fork this repository.
+    Create a branch for your changes:
 
+git checkout -b feature/my-feature
 
-# Contributing
+Make your changes and commit:
 
-Contributions are welcome! Please open an issue or submit a pull request for any enhancements or bug fixes.
+    git commit -m "Description of your changes"
 
-# License
+    Submit a pull request for review.
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+License
+
+BackupBuddy is licensed under the MIT License. See LICENSE for more details.
+
+Feel free to copy and paste this updated README into your project. If you need assistance with pushing it to GitHub or have any other questions, don't hesitate to ask! 😊
