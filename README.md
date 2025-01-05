@@ -54,6 +54,7 @@ BackupBuddy should install these for you.
  Install using:
 
     git clone https://github.com/TubalQ/BackupBuddy.git
+    cd ~/BackupBuddy
     chmod +x BackupBuddy
 
 ### Usage
