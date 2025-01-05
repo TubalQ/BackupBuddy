@@ -66,60 +66,71 @@ import os
 import shutil
 import subprocess
 
-DEPENDENCY_FLAG_FILE = os.path.expanduser("~/.backupbuddy_dependencies_checked")
-
 def check_and_install_dependencies():
-    """Check and install necessary dependencies."""
-    if os.path.exists(DEPENDENCY_FLAG_FILE):
+    """
+    Kontrollera och installera nödvändiga beroenden.
+    Installera rclone med apt i LXC-container, annars via curl.
+    """
+    DEPENDENCY_FLAG_FILE = os.path.expanduser("~/.backupbuddy_dependencies_checked")
+    INSTALLED_PACKAGES_LOG = os.path.expanduser("~/.backupbuddy_installed_packages.log")
+    dependencies = ["curl", "pigz", "tar", "pv", "cron"]
+
+    # Kontrollera om alla beroenden finns installerade
+    missing_dependencies = [dep for dep in dependencies if not shutil.which(dep)]
+
+    if not missing_dependencies and os.path.exists(DEPENDENCY_FLAG_FILE):
         print("All dependencies are already installed.")
         return
 
-    print("Checking dependencies for the first time...")
-    dependencies = {
-        "rclone": "curl https://rclone.org/install.sh | sudo bash",
-        "pigz": "sudo apt install pigz -y",
-        "tar": "sudo apt install tar -y",
-        "pv": "sudo apt install pv -y",
-        "cron": "sudo apt install cron -y",
-    }
+    print("\nInstalling missing dependencies...")
 
-    all_installed = True
-    for tool, install_cmd in dependencies.items():
-        if shutil.which(tool):
-            print(f"{tool} is already installed.")
-        else:
-            print(f"{tool} is missing. Installing...")
-            try:
-                subprocess.run(install_cmd, shell=True, check=True)
-                if shutil.which(tool):
-                    print(f"{tool} installed successfully.")
-                else:
-                    print(f"Error: {tool} installation failed. Please install it manually.")
-                    all_installed = False
-            except subprocess.CalledProcessError:
-                print(f"Error: Failed to install {tool}. Please install it manually.")
-                all_installed = False
+    def install_dependency(package_manager, packages):
+        command = f"{package_manager} install -y {' '.join(packages)}"
+        if os.geteuid() != 0:
+            command = f"sudo {command}"
+        try:
+            subprocess.run(command, shell=True, check=True)
+            print(f"Successfully installed: {' '.join(packages)}")
+            with open(INSTALLED_PACKAGES_LOG, "a") as log_file:
+                for package in packages:
+                    log_file.write(f"{package}\n")
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to install {packages} using {package_manager}: {e}")
 
-    if all_installed:
-        # Create the flag file to mark dependencies as checked
+    # Installera basberoenden
+    if shutil.which("apt"):
+        install_dependency("apt", missing_dependencies)
+
+    # Kontrollera om det är en LXC-container
+    is_lxc = False
+    try:
+        with open("/proc/1/environ", "r") as f:
+            is_lxc = "container=lxc" in f.read()
+    except FileNotFoundError:
+        pass
+
+    # Installera rclone
+    if is_lxc:
+        print("\nDetected LXC environment. Installing rclone via apt.")
+        install_dependency("apt", ["rclone"])
+    else:
+        print("\nNon-LXC environment detected. Attempting to install rclone via curl.")
+        try:
+            subprocess.run("curl https://rclone.org/install.sh | sudo bash", shell=True, check=True)
+            print("rclone installed successfully via curl.")
+        except subprocess.CalledProcessError:
+            print("Failed to install rclone via curl. Falling back to apt.")
+            install_dependency("apt", ["rclone"])
+
+    # Uppdatera flaggfilen om alla beroenden nu är installerade
+    if all(shutil.which(dep) for dep in dependencies + ["rclone"]):
         with open(DEPENDENCY_FLAG_FILE, "w") as flag_file:
             flag_file.write("Dependencies checked and installed.")
         print("All dependencies are installed and ready to use.")
-
-
-
-def check_rclone_version():
-    """Check the version of rclone installed."""
-    try:
-        result = subprocess.run(["rclone", "version"], text=True, capture_output=True, check=True)
-        print("Installed rclone version:")
-        print(result.stdout.strip())
-    except FileNotFoundError:
-        print("rclone is not installed.")
-    except subprocess.CalledProcessError:
-        print("Failed to check rclone version.")
-
-
+    else:
+        print("Some dependencies are still missing. Please resolve them manually.")
+        if os.path.exists(DEPENDENCY_FLAG_FILE):
+            os.remove(DEPENDENCY_FLAG_FILE)
 
 def list_remotes():
     """List configured rclone remotes."""
@@ -196,48 +207,49 @@ def select_remote():
 
 
 def generate_backup_script(config, job_id):
-    """Generate a backup script for the specified job."""
+    """
+    Generate a backup script for the specified job, including rclone flags.
+    """
     job = config[job_id]
     script_path = os.path.join(SCRIPT_DIR, f"backup_{job_id}.sh")
     os.makedirs(SCRIPT_DIR, exist_ok=True)
-    cores = f"-p {job['cores']}" if job.get("cores") else ""
+
+    # Include rclone flags
+    rclone_flags = " ".join(f"{flag} {value}" for flag, value in job.get("rclone_flags", {}).items())
 
     with open(script_path, "w") as script:
         script.write("#!/bin/bash\n")
         script.write("set -e\n")
         script.write("echo 'Starting backup process...'\n")
 
-        # Säkerställ att TEMP_DIR finns
+        # Ensure TEMP_DIR exists
         script.write(f"if [ ! -d \"{TEMP_DIR}\" ]; then\n")
-        script.write(f"    echo 'Creating temporary directory: {TEMP_DIR}'\n")
         script.write(f"    mkdir -p {TEMP_DIR}\n")
         script.write("fi\n")
 
         if job["compress"]:
-            # Komprimera och (om aktuellt) splitta
+            # Compress and split if needed
             compression_level = job.get("compression_level", 6)
             script.write("echo 'Compressing files...'\n")
-            script.write(f"tar -cf - -C {job['source_dir']} . | pigz {cores} -{compression_level} > {TEMP_DIR}/backup.tar.gz\n")
-            
+            script.write(f"tar -cf - -C {job['source_dir']} . | pigz -{compression_level} > {TEMP_DIR}/backup.tar.gz\n")
             if job["split_files"]:
                 split_size = job.get("split_size", "100M")
                 script.write("echo 'Splitting compressed file...'\n")
                 script.write(f"split -b {split_size} {TEMP_DIR}/backup.tar.gz {TEMP_DIR}/backup-part-\n")
                 script.write(f"rm {TEMP_DIR}/backup.tar.gz\n")
-            
-            script.write(f"rclone copy {TEMP_DIR}/ {job['destination']} --progress --log-level INFO\n")
+            script.write(f"rclone copy {TEMP_DIR}/ {job['destination']} {rclone_flags}\n")
         elif job["split_files"]:
-            # Splitta utan komprimering
+            # Split without compression
             split_size = job.get("split_size", "100M")
             script.write("echo 'Splitting files without compression...'\n")
             script.write(f"tar -cf {TEMP_DIR}/backup.tar -C {job['source_dir']} .\n")
             script.write(f"split -b {split_size} {TEMP_DIR}/backup.tar {TEMP_DIR}/backup-part-\n")
             script.write(f"rm {TEMP_DIR}/backup.tar\n")
-            script.write(f"rclone copy {TEMP_DIR}/ {job['destination']} --progress --log-level INFO\n")
+            script.write(f"rclone copy {TEMP_DIR}/ {job['destination']} {rclone_flags}\n")
         else:
-            # Ingen komprimering eller split
+            # No compression or splitting
             script.write("echo 'Copying files without compression or splitting...'\n")
-            script.write(f"rclone copy {job['source_dir']} {job['destination']} --progress --log-level INFO\n")
+            script.write(f"rclone copy {job['source_dir']} {job['destination']} {rclone_flags}\n")
 
         script.write("echo 'Cleaning up temporary files...'\n")
         script.write(f"rm -rf {TEMP_DIR}/*\n")
@@ -245,7 +257,6 @@ def generate_backup_script(config, job_id):
 
     os.chmod(script_path, 0o755)
     return script_path
-
 
 
 
@@ -375,14 +386,45 @@ def clear_configurations():
         print("Invalid choice. Returning to main menu.")
 
 
-def main():
-    """Main program to handle backup and restore operations."""
-    print("\n========================================")
-    print("Welcome to BackupBuddy!")
-    print("Let's back up your files and keep them safe.")
-    print("========================================\n")
+def display_logo():
+    """
+    Display a red ASCII logo next to the welcome message.
+    """
+    # ANSI Escape Code för röd färg
+    RED = "\033[31m"
+    RESET = "\033[0m"  # Återställ till standardfärg
 
+    ascii_logo = rf"""
+     {RED} _________________
+    | | ____My_____ |o|
+    | | ____Old____ | |
+    | | _Pictures__ | |
+    | | _____&_____ | |
+    | |____Taxes____| |
+    |     _______     |
+    |    |       |   ||
+    | DD |       |   V|
+    |____|_______|____|{RESET}
+    """
+    print(".............................................................")
+    print("psst, look here:")
+    print("Have you considered trying out Parrot OS Sec/Home or HTB edition?")
+    print("Find them here: https://www.parrotsec.org\n")
+    print("\n===============================================")
+    print("Welcome to BackupBuddy!                      ||")
+    print("Let's back up your files and keep them safe. ||")
+    print("===============================================")
+    print(ascii_logo)
+    print("For help regarding BackupBuddy, check: https://github.com/TubalQ/BackupBuddy")
+    print("Good Luck & check option 8 for help // Best regards T-Q https://t-vault.se")
+def main():
+    """
+    Main program to handle backup and restore operations.
+    """
     check_and_install_dependencies()
+
+    # Display the ASCII logo and welcome message
+    display_logo()
 
     while True:
         config = load_config()
@@ -396,8 +438,11 @@ def main():
         print("5. Manage cron jobs")
         print("6. Clear configurations and data")
         print("7. Add a new remote or local path")
-        print("8. Exit")
-        choice = input("Enter your choice (1/2/3/4/5/6/7/8): ").strip()
+        print("8. Uninstall BackupBuddy")
+        print("9. Help")
+        print("10. Exit")
+        
+        choice = input("Enter your choice (1-10): ").strip()
 
         if choice == "1":
             create_backup_job(config)
@@ -414,6 +459,10 @@ def main():
         elif choice == "7":
             manage_remotes_and_paths()
         elif choice == "8":
+            uninstall_backupbuddy()
+        elif choice == "9":
+            show_help()
+        elif choice == "10":
             print("Goodbye! Thanks for using BackupBuddy.")
             break
         else:
@@ -423,15 +472,17 @@ def main():
 import os
 
 def create_backup_job(config):
-    """Guide user through creating a new backup job with indexed navigation."""
+    """
+    Guide user through creating a new backup job with rclone flag configuration.
+    """
     print("\nCreating a new backup job.")
     job_id = input("Enter a unique ID for the backup job: ").strip()
 
-    # Navigera till lokala kataloger för att välja källa
+    # Select source directory
     print("\nNavigate to select the source directory (local).")
     source_dir = navigate_local_directories()
 
-    # Välj remote och navigera till destination
+    # Select remote and destination
     print("\nNavigate to select the destination directory (remote).")
     remote_name = select_remote()
     if remote_name.lower() == "b":
@@ -439,36 +490,52 @@ def create_backup_job(config):
         return
     destination_path = navigate_remote_directories(remote_name)
 
-    # Fråga om komprimering och sätt kompressionsnivå
+    # Ask about compression and splitting
     compress = input("Do you want to compress files? (yes/no): ").strip().lower() == "yes"
     compression_level = None
     if compress:
         compression_level = int(input("Enter compression level (1=low, 9=high, default: 6): ").strip() or 6)
 
-    # Fråga om split och storlek
     split_files = input("Do you want to split files? (yes/no): ").strip().lower() == "yes"
     split_size = None
     if split_files:
         split_size = input("Enter maximum size per part (e.g., 10M, 1G, default: 100M): ").strip() or "100M"
 
-    # Fråga om antal kärnor
     cores = None
     if compress or split_files:
         cores = int(input("Enter the number of CPU cores to use (default: 4): ").strip() or 4)
 
-    # Spara konfigurationen
+    # Configure rclone flags
+    print("\nConfigure rclone flags for this job (Press Enter to use default values):")
+    default_flags = {
+        "--tpslimit": "2",
+        "--tpslimit-burst": "1",
+        "--transfers": "2",
+        "--checkers": "1",
+        "--low-level-retries": "3",
+        "--retries": "5",
+        "--log-file": f"{job_id}_rclone.log",
+        "--log-level": "INFO",
+    }
+    for flag, value in default_flags.items():
+        new_value = input(f"{flag} (default: {value}): ").strip()
+        if new_value:
+            default_flags[flag] = new_value
+
+    # Save the configuration
     config[job_id] = {
         "source_dir": source_dir,
-        "destination": destination_path,  # Använd current_path från navigeringsfunktionen
+        "destination": destination_path,
         "compress": compress,
         "compression_level": compression_level,
         "split_files": split_files,
         "split_size": split_size,
         "cores": cores,
+        "rclone_flags": default_flags,  # Save flags in the job configuration
     }
     save_config(config)
 
-    # Generera och kör backup-skript
+    # Generate and run the backup script
     script_path = generate_backup_script(config, job_id)
     print(f"Backup script generated: {script_path}")
 
@@ -479,9 +546,8 @@ def create_backup_job(config):
     except subprocess.CalledProcessError as e:
         print(f"Error occurred while running the backup job: {e}")
 
-    # Fråga om cron-jobb efter att backup-jobbet har körts
-    configure_cron_job(config, job_id)
-
+    # Ask about cron-job setup
+    schedule_cron(config[job_id])
 
 
 def create_transfer(config):
@@ -756,6 +822,19 @@ def edit_cron_jobs():
     else:
         print("Invalid choice. Returning to main menu.")
 
+def validate_flag_value(flag, value):
+    """
+    Validera inmatade värden för rclone-flaggor.
+    """
+    try:
+        if flag in ["--tpslimit", "--tpslimit-burst", "--transfers", "--checkers", "--low-level-retries", "--retries"]:
+            value = int(value)
+            if value < 1:
+                raise ValueError(f"{flag} must be greater than 0.")
+        return value
+    except ValueError as e:
+        print(f"Invalid value for {flag}: {e}")
+        return None
 
 
 
@@ -764,7 +843,7 @@ import os
 
 def navigate_local_directories():
     """Let the user navigate local directories with current directory marked in yellow."""
-    current_path = "/root"  # Start from the /root directory
+    current_path = "/"   # Start from the / directory
     YELLOW = '\033[33m'  # ANSI escape code for yellow text
     GREEN = '\033[32m'   # ANSI escape code for green text
     RED = '\033[31m'     # ANSI escape code for red text
@@ -1047,6 +1126,428 @@ def manage_remotes_and_paths():
     else:
         print("Invalid choice. Returning to main menu.")
 
+def run_command(command):
+    """
+    Kör ett kommando med eller utan sudo beroende på om scriptet körs som root.
+    """
+    if os.geteuid() != 0:
+        command = f"sudo {command}"
+    try:
+        subprocess.run(command, shell=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing command: {command}\n{e}")
+        raise
+    
+def schedule_cron(job):
+    """
+    Add a cron job to root's crontab, reusing the rclone flags stored in the job configuration.
+    """
+    print("\nSetting up a cron job for your task...")
+
+    # Retrieve rclone flags from the job configuration
+    rclone_flags = " ".join(f"{flag} {value}" for flag, value in job.get("rclone_flags", {}).items())
+
+    # Build cron command
+    source = job.get("source") or job.get("source_dir")
+    destination = job["destination"]
+    cron_command = f"rclone sync {source} {destination} {rclone_flags}"
+
+    # Collect cron schedule
+    print("\nSet up your cron schedule:")
+    minute = input("Minute (0-59, default: 0): ").strip() or "0"
+    hour = input("Hour (0-23, default: 0): ").strip() or "0"
+    day_of_month = input(
+        "Day of month (1-31 or *, default: * for every day): "
+    ).strip() or "*"
+    month = input("Month (1-12 or *, default: * for every month): ").strip() or "*"
+    day_of_week = input(
+        "Day of week (0=Sunday, 6=Saturday, or *, default: * for every day): "
+    ).strip() or "*"
+
+    # Adjust incompatible fields
+    if day_of_month != "*" and day_of_week != "*":
+        print(
+            "\nWarning: You specified both 'day of month' and 'day of week'. "
+            "For compatibility, 'day of week' will be ignored."
+        )
+        day_of_week = "*"
+
+    # Combine cron schedule
+    schedule = f"{minute} {hour} {day_of_month} {month} {day_of_week}"
+
+    # Add the cron job
+    print(f"\nAdding the following cron job:\n{schedule} {cron_command}")
+    try:
+        subprocess.run(f"(crontab -l 2>/dev/null; echo \"{schedule} {cron_command}\") | crontab -", shell=True, check=True)
+        print("Cron job added successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to add cron job: {e}")
+
+
+def show_help():
+    """
+    Open the help section in a new terminal window.
+    """
+    help_content = """
+========================================
+Welcome to the BackupBuddy Help Section!
+========================================
+
+BackupBuddy is a powerful tool for backing up, restoring, and transferring files 
+between local and cloud-based systems. It supports task scheduling using cron jobs 
+and provides flexible settings to minimize API requests to cloud providers.
+
+Key Features:
+1. Create Backups:
+   Back up local files or folders to cloud storage or another local destination.
+2. Restore Backups:
+   Restore files from a backup to your desired destination.
+3. Schedule Tasks:
+   Set up cron jobs to automate backups and transfers.
+4. Configure rclone Remotes:
+   Manage cloud storage accounts and connections via rclone.
+5. Optimize API Requests:
+   Customize rclone flags such as --tpslimit and --transfers to avoid exceeding API limits.
+
+Example Customizable rclone Flags:
+  --tpslimit <number>: Limits the number of API requests per second (default: 2).
+  --tpslimit-burst <number>: Allows a short burst of requests above the limit (default: 1).
+  --transfers <number>: Sets the number of concurrent file transfers (default: 2).
+  --checkers <number>: Sets the number of file checkers to verify file integrity (default: 1).
+  --low-level-retries <number>: Number of retries for low-level errors (default: 3).
+  --retries <number>: Number of retries for the entire operation (default: 5).
+  --log-file <file>: Specifies the log file for rclone operations (default: rclone.log).
+  --log-level <level>: Sets the verbosity level for logging (default: INFO).
+
+Tips:
+1. Use reasonable values for flags to avoid hitting API limits imposed by cloud providers.
+2. Review log files (rclone.log) to troubleshoot issues or monitor operations.
+3. Use "Manage Configurations" to update existing tasks or clean up unnecessary data.
+
+For more information, visit the rclone documentation or contact support!
+"""
+
+    # Check for available terminal emulator
+    terminal_command = None
+    if shutil.which("gnome-terminal"):
+        terminal_command = "gnome-terminal --"
+    elif shutil.which("xterm"):
+        terminal_command = "xterm -hold -e"
+    elif shutil.which("konsole"):
+        terminal_command = "konsole -e"
+    else:
+        print("No supported terminal emulator found. Displaying help in this terminal.")
+        print(help_content)
+        return
+
+    # Create a temporary script to display help content
+    temp_script = "/tmp/backupbuddy_help.sh"
+    with open(temp_script, "w") as script:
+        script.write("#!/bin/bash\n")
+        script.write(f"echo \"{help_content}\"\n")
+        script.write("read -p 'Press Enter to close...'")  # Keeps the terminal open
+    os.chmod(temp_script, 0o755)
+
+    # Open the help in a new terminal window
+    try:
+        subprocess.run(f"{terminal_command} {temp_script}", shell=True, check=True)
+    except Exception as e:
+        print(f"Failed to open help in a new terminal: {e}")
+    finally:
+        os.remove(temp_script)  # Clean up the temporary script
+
+
+def remove_dependencies():
+    """
+    Avinstallera endast verktyg och beroenden som installerades av BackupBuddy.
+    Kör avinstallation i sekvens och hantera varje paket individuellt.
+    """
+    INSTALLED_PACKAGES_LOG = os.path.expanduser("~/.backupbuddy_installed_packages.log")
+    if not os.path.exists(INSTALLED_PACKAGES_LOG):
+        print("\nNo dependencies installed by BackupBuddy to remove.")
+        return
+
+    with open(INSTALLED_PACKAGES_LOG, "r") as log_file:
+        dependencies = [line.strip() for line in log_file.readlines()]
+
+    if not dependencies:
+        print("\nNo dependencies installed by BackupBuddy to remove.")
+        return
+
+    print("\nRemoving dependencies installed by BackupBuddy...")
+
+    def uninstall_package(package_manager, package):
+        command = f"{package_manager} remove -y {package}"
+        if os.geteuid() != 0:
+            command = f"sudo {command}"
+        try:
+            subprocess.run(command, shell=True, check=True)
+            print(f"Successfully removed: {package}")
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to remove {package} using {package_manager}: {e}")
+
+    package_manager = None
+    if shutil.which("apt"):
+        package_manager = "apt"
+        print("Detected Debian/Ubuntu-based distribution.")
+    elif shutil.which("yum"):
+        package_manager = "yum"
+        print("Detected RedHat/CentOS-based distribution.")
+    elif shutil.which("dnf"):
+        package_manager = "dnf"
+        print("Detected Fedora-based distribution.")
+    elif shutil.which("pacman"):
+        package_manager = "pacman"
+        print("Detected Arch-based distribution.")
+    else:
+        print("Unknown Linux distribution. Please remove dependencies manually.")
+        return
+
+    # Kör avinstallation för varje paket
+    for dependency in dependencies:
+        print(f"\nAttempting to remove: {dependency}")
+        uninstall_package(package_manager, dependency)
+
+    # Hantera specifikt rclone om det installerades via ett skript
+    if "rclone" in dependencies:
+        print("\nChecking for manually installed rclone...")
+        try:
+            rclone_path = shutil.which("rclone")
+            if rclone_path:
+                os.remove(rclone_path)
+                print(f"Manually installed rclone binary removed: {rclone_path}")
+            else:
+                print("rclone binary not found. Skipping manual removal.")
+        except Exception as e:
+            print(f"Failed to remove rclone binary: {e}")
+
+    # Ta bort loggfilen efter avinstallation
+    try:
+        os.remove(INSTALLED_PACKAGES_LOG)
+        print("Removed log of installed packages.")
+    except Exception as e:
+        print(f"Failed to remove package log file: {e}")
+
+
+
+def remove_cron_jobs():
+    """
+    Ta bort endast de cron-jobb som skapats av BackupBuddy.
+    Identifieras genom kommentaren "# backupbuddy".
+    """
+    print("\nRemoving BackupBuddy cron jobs...")
+
+    try:
+        # Hämta nuvarande cron-jobb
+        if os.geteuid() != 0:
+            print("Requesting sudo to manage cron jobs.")
+            result = subprocess.run("sudo crontab -l", shell=True, text=True, capture_output=True)
+        else:
+            result = subprocess.run("crontab -l", shell=True, text=True, capture_output=True)
+
+        # Kontrollera om crontab innehåller jobb
+        if result.returncode != 0 or not result.stdout.strip():
+            print("No cron jobs found.")
+            return
+
+        # Filtrera bort endast BackupBuddy-jobb
+        current_cron_jobs = result.stdout.strip().split("\n")
+        updated_cron_jobs = [job for job in current_cron_jobs if "# backupbuddy" not in job.lower()]
+
+        # Uppdatera crontab utan BackupBuddy-jobb
+        if len(updated_cron_jobs) == len(current_cron_jobs):
+            print("No BackupBuddy cron jobs found to remove.")
+            return
+
+        command = "crontab -" if os.geteuid() == 0 else "sudo crontab -"
+        cron_data = "\n".join(updated_cron_jobs) + "\n"
+        subprocess.run(f"echo '{cron_data}' | {command}", shell=True, check=True)
+
+        print("BackupBuddy cron jobs removed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to remove cron jobs: {e}")
+
+
+def remove_temp_files():
+    """
+    Ta bort alla temporära filer som används av BackupBuddy.
+    """
+    print("\nRemoving temporary files...")
+
+    try:
+        if os.path.exists(TEMP_DIR):
+            shutil.rmtree(TEMP_DIR)
+            print(f"Temporary files removed from {TEMP_DIR}")
+        else:
+            print("No temporary files found.")
+    except Exception as e:
+        print(f"Failed to remove temporary files: {e}")
+
+
+def remove_configurations():
+    """
+    Remove all configurations, including rclone configuration files.
+    """
+    print("\nRemoving configurations...")
+
+    # Ta bort BackupBuddy-konfigurationsfil
+    if os.path.exists(CONFIG_FILE):
+        try:
+            os.remove(CONFIG_FILE)
+            print(f"BackupBuddy configuration file removed: {CONFIG_FILE}")
+        except Exception as e:
+            print(f"Failed to remove BackupBuddy configuration file: {e}")
+    else:
+        print("No BackupBuddy configuration file found.")
+
+    # Ta bort rclone-konfigurationsfil
+    rclone_config_path = os.path.expanduser("~/.config/rclone/rclone.conf")
+    if os.path.exists(rclone_config_path):
+        try:
+            os.remove(rclone_config_path)
+            print(f"rclone configuration file removed: {rclone_config_path}")
+        except Exception as e:
+            print(f"Failed to remove rclone configuration file: {e}")
+    else:
+        print("No rclone configuration file found.")
+
+    # Rensa hela rclone-konfigurationsmappen om den är tom
+    rclone_config_dir = os.path.expanduser("~/.config/rclone")
+    if os.path.exists(rclone_config_dir) and not os.listdir(rclone_config_dir):
+        try:
+            os.rmdir(rclone_config_dir)
+            print(f"Empty rclone configuration directory removed: {rclone_config_dir}")
+        except Exception as e:
+            print(f"Failed to remove rclone configuration directory: {e}")
+
+
+import sys  # Lägg till sys-modulen för att använda sys.exit()
+
+def uninstall_backupbuddy():
+    """
+    Uninstall BackupBuddy and all related components.
+    Allow the user to choose whether to remove only tools and dependencies
+    or everything, including logs, configs, jobs, and cronjobs.
+    """
+    print("\nUninstall BackupBuddy")
+    print("1. Remove tools and dependencies only")
+    print("2. Remove everything (tools, dependencies, temp, configs, jobs, cronjobs)")
+    print("3. Cancel")
+
+    choice = input("Enter your choice (1/2/3): ").strip()
+
+    if choice == "1":
+        # Remove only tools and dependencies
+        remove_dependencies()
+    elif choice == "2":
+        # Full uninstallation
+        remove_cron_jobs()
+        remove_temp_files()
+        remove_configurations()
+        remove_dependencies()
+        print("\nBackupBuddy and all related components have been fully removed.")
+        validate_removal()  # Run validation
+        print("Exiting BackupBuddy. Goodbye!")
+        sys.exit(0)  # Avsluta programmet direkt efter avinstallation
+    elif choice == "3":
+        print("Uninstallation canceled.")
+    else:
+        print("Invalid choice. Returning to main menu.")
+
+
+def validate_removal():
+    """
+    Kontrollera att alla förväntade filer, mappar och cron-jobb har tagits bort.
+    """
+    print("\nValidating removal of BackupBuddy components...")
+
+    # Kontrollera mappen TEMP_DIR
+    if os.path.exists(TEMP_DIR):
+        print(f"Temporary directory still exists: {TEMP_DIR}")
+    else:
+        print(f"Temporary directory successfully removed: {TEMP_DIR}")
+
+    # Kontrollera konfigurationsfilen
+    if os.path.exists(CONFIG_FILE):
+        print(f"Configuration file still exists: {CONFIG_FILE}")
+    else:
+        print(f"Configuration file successfully removed: {CONFIG_FILE}")
+
+    # Kontrollera backup-skriptmappen
+    if os.path.exists(SCRIPT_DIR):
+        print(f"Backup scripts directory still exists: {SCRIPT_DIR}")
+    else:
+        print(f"Backup scripts directory successfully removed: {SCRIPT_DIR}")
+
+    # Kontrollera om cron-jobb finns kvar
+    try:
+        if os.geteuid() != 0:
+            result = subprocess.run("sudo crontab -l", shell=True, text=True, capture_output=True)
+        else:
+            result = subprocess.run("crontab -l", shell=True, text=True, capture_output=True)
+
+        if result.returncode == 0 and "backupbuddy" in result.stdout.lower():
+            print("Some BackupBuddy cron jobs still exist:")
+            print(result.stdout)
+        else:
+            print("All BackupBuddy cron jobs successfully removed.")
+    except subprocess.CalledProcessError:
+        print("No cron jobs found, or crontab is empty.")
+
+    print("\nValidation completed.")
+
+
+def show_help():
+    """
+    Display an overview of BackupBuddy and its features.
+    """
+    print("\n========================================")
+    print("Welcome to the BackupBuddy Help Section!")
+    print("========================================\n")
+    print("BackupBuddy is a powerful tool for backing up, restoring, and transferring files "
+          "between local and cloud-based systems.")
+    print("It supports task scheduling using cron jobs and provides flexible settings "
+          "to minimize API requests to cloud providers.\n")
+    
+    print("Key Features:")
+    print("1. **Create Backups:**")
+    print("   Back up local files or folders to cloud storage or another local destination.")
+    print("2. **Restore Backups:**")
+    print("   Restore files from a backup to your desired destination.")
+    print("3. **Schedule Tasks:**")
+    print("   Set up cron jobs to automate backups and transfers.")
+    print("4. **Configure rclone Remotes:**")
+    print("   Manage cloud storage accounts and connections via rclone.")
+    print("5. **Optimize API Requests:**")
+    print("   Customize rclone flags such as `--tpslimit` and `--transfers` to avoid exceeding API limits.\n")
+    
+    print("Available Commands:")
+    print("1. **Create a Backup:** Guides you through creating a new backup task.")
+    print("2. **Create a Transfer Task:** Set up a task to transfer files between two destinations.")
+    print("3. **Restore a Backup:** Restore files from a previous backup.")
+    print("4. **Schedule Cron Jobs:** Create automated schedules to run backup and transfer tasks.")
+    print("5. **Manage Configurations:** View, edit, or delete existing settings and tasks.")
+    print("6. **Uninstall BackupBuddy:** Removes all files, logs, and settings related to BackupBuddy.\n")
+    
+    print("Example Customizable rclone Flags:")
+    print("  --tpslimit <number>: Limits the number of API requests per second (default: 2).")
+    print("  --tpslimit-burst <number>: Allows a short burst of requests above the limit (default: 1).")
+    print("  --transfers <number>: Sets the number of concurrent file transfers (default: 2).")
+    print("  --checkers <number>: Sets the number of file checkers to verify file integrity (default: 1).")
+    print("  --low-level-retries <number>: Number of retries for low-level errors (default: 3).")
+    print("  --retries <number>: Number of retries for the entire operation (default: 5).")
+    print("  --log-file <file>: Specifies the log file for rclone operations (default: rclone.log).")
+    print("  --log-level <level>: Sets the verbosity level for logging (default: INFO).\n")
+    
+    print("Tips:")
+    print("1. Use reasonable values for flags to avoid hitting API limits imposed by cloud providers.")
+    print("2. Review log files (`rclone.log`) to troubleshoot issues or monitor operations.")
+    print("3. Use `Manage Configurations` to update existing tasks or clean up unnecessary data.\n")
+    
+    print("For more information, visit the rclone documentation or contact support!")
+
+
 
 if __name__ == "__main__":
     main()
+
