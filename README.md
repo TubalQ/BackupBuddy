@@ -5,7 +5,16 @@ Features
 Interactive Directory Navigation
 
    Local Directories: Navigate, select, or create directories directly from the menu.
+   
    Remote Directories (via rclone): Browse, select, or create directories on remote locations without manual commands.
+
+   Set cron jobs easily and chose between "copy" or "sync"
+
+   Set local shortcuts
+
+   Remote to Remote
+   Local to Remote
+   Remote to Local
 
 ### Visual Enhancements
 
@@ -74,7 +83,7 @@ b. Go back
 c. Enter a custom local directory path
 d. Create a new directory
 
-####Remote Directories
+#### Remote Directories
 
 Current remote directory: ProtonDrive:/backups
 
