@@ -68,6 +68,26 @@ BackupBuddy should install these for you.
         Restore an existing backup.
         Manage remotes and local shortcuts.
 
+## Miscs
+Some cloud providers (like Google Drive and Proton Drive are very sensetive about API requests.
+Consider using these flags in your cron job to lower them, these settings have worked very well for me.
+    
+    
+    
+    rclone sync source:path your-source:your-destination:path --tpslimit 2 --tpslimit-burst 1 --transfers 2 --checkers 1 --low-level-retries 3 --retries 5 --log-file=rclone.log --log-level INFO 
+   
+   or
+   
+    rclone sync source:path your-source:your-destination:path \
+    --tpslimit 2 \         # Limit to 1 API request per second
+    --tpslimit-burst 1 \   # Disallow bursts; keep it steady at 1 request
+    --transfers 2 \        # Perform only one file transfer at a time
+    --checkers 1 \         # Limit concurrent check processes to 1
+    --low-level-retries 3 \ # Retry low-level errors a maximum of 3 times
+    --retries 5 \          # Limit total retries to 5
+    --log-file=rclone.log \ # Log all operations to a file
+    --log-level INFO       # Use medium verbosity level for monitoring
+
 #### You need to answer "yes" or "no", and not "y" or "n".
 
 ### Local Directories
