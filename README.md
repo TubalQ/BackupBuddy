@@ -88,7 +88,7 @@ Consider using these flags in your cron job to lower them, these settings have w
     --log-file=rclone.log \ # Log all operations to a file
     --log-level INFO       # Use medium verbosity level for monitoring
 
-#### You need to answer "yes" or "no", and not "y" or "n".
+#### You need to answer "yes" or "no", and not "y" or "n" on the questions!!!
 
 ### Local Directories
 
