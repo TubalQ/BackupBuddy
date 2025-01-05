@@ -56,6 +56,10 @@ BackupBuddy should install these for you.
     git clone https://github.com/TubalQ/BackupBuddy.git
     cd ~/BackupBuddy
     chmod +x BackupBuddy
+    
+In unprivileged LXC's you may need to manually install rclone
+     
+     apt install rclone
 
 ### Usage
 
