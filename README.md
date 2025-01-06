@@ -128,17 +128,8 @@ d. Create a new directory
 
 
 #### Contributing
-
-   Fork this repository.
-   Create a branch for your changes:
-
-    git checkout -b feature/my-feature
-
+Contributions are welcome
 #### Make your changes and commit:
-
-    git commit -m "Description of your changes"
-
-    Submit a pull request for review.
 
 ## License
 
