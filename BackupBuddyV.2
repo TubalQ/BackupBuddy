@@ -9,6 +9,11 @@ CONFIG_FILE = os.path.expanduser("~/.backup_tool_jobs.json")
 SCRIPT_DIR = os.path.expanduser("~/backup_scripts/")
 TEMP_DIR = "/var/tmp/backupbuddy_temp"
 
+#PREPARE TEMP#
+
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
 
 def prepare_temp_directory():
     """Create a dedicated temporary directory for backups."""
@@ -16,7 +21,11 @@ def prepare_temp_directory():
         os.makedirs(TEMP_DIR, exist_ok=True)
     os.chmod(TEMP_DIR, 0o777)
 
+#CONFIG#
 
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
 
 def load_config():
     """Load configuration data from the JSON file and validate it."""
@@ -34,14 +43,20 @@ def load_config():
         return config
     return {}
 
-
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
 
 def save_config(config):
     """Save configuration data to the JSON file."""
     with open(CONFIG_FILE, "w") as file:
         json.dump(config, file, indent=4)
 
+#LISTINGS AND REMOTES"
 
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
 
 def list_jobs(config):
     """List all backup and transfer jobs."""
@@ -59,17 +74,100 @@ def list_jobs(config):
                   f"Encrypted: {job_data.get('encrypt', False)}, Compressed: {job_data.get('compress', False)}, "
                   f"Split: {job_data.get('split_files', False)}")
 
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
+
+def list_remotes():
+    """List configured rclone remotes."""
+    try:
+        result = subprocess.run("rclone listremotes", shell=True, text=True, capture_output=True, check=True)
+        remotes = result.stdout.strip().splitlines()
+        if remotes:
+            print("\nAvailable remotes:")
+            for i, remote in enumerate(remotes, start=1):
+                print(f"{i}. {remote}")
+            return remotes
+        else:
+            print("No remotes found. Please configure a remote first.")
+            subprocess.run("rclone config", shell=True)
+            return list_remotes()
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to retrieve remotes: {e}")
+        return []
+
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
+
+def manage_remotes_and_paths():
+    """Add new remotes or local paths."""
+    print("\nManage Remotes and Local Paths")
+    print("1. Add a new remote")
+    print("2. Add a new local shortcut")
+    print("3. View existing remotes")
+    print("4. View local shortcuts")
+    print("5. Back to main menu")
+
+    choice = input("Enter your choice (1/2/3/4/5): ").strip()
+
+    if choice == "1":
+        print("\nAdding a new remote...")
+        try:
+            subprocess.run("rclone config", shell=True, check=True)
+            print("New remote added successfully.")
+        except subprocess.CalledProcessError as e:
+            print(f"Error adding remote: {e.stderr}")
+    elif choice == "2":
+        print("\nAdding a new local shortcut...")
+        shortcut_path = input("Enter the path for the new local shortcut: ").strip()
+        if os.path.exists(shortcut_path):
+            with open("local_shortcuts.txt", "a") as file:
+                file.write(shortcut_path + "\n")
+            print(f"New local shortcut '{shortcut_path}' added successfully.")
+        else:
+            print(f"Error: The path '{shortcut_path}' does not exist.")
+    elif choice == "3":
+        print("\nExisting remotes:")
+        try:
+            result = subprocess.run(["rclone", "listremotes"], capture_output=True, text=True, check=True)
+            remotes = result.stdout.strip().splitlines()
+            if remotes:
+                for remote in remotes:
+                    print(f"- {remote}")
+            else:
+                print("No remotes configured yet.")
+        except subprocess.CalledProcessError as e:
+            print(f"Error listing remotes: {e.stderr}")
+    elif choice == "4":
+        print("\nExisting local shortcuts:")
+        try:
+            with open("local_shortcuts.txt", "r") as file:
+                shortcuts = file.readlines()
+                if shortcuts:
+                    for shortcut in shortcuts:
+                        print(f"- {shortcut.strip()}")
+                else:
+                    print("No local shortcuts configured yet.")
+        except FileNotFoundError:
+            print("No local shortcuts configured yet.")
+    elif choice == "5":
+        print("Returning to main menu.")
+    else:
+        print("Invalid choice. Returning to main menu.")
 
 
+#CHECK AND INSTALL DEPENDENCIES#
 
-import os
-import shutil
+import subprocess
+import time  # Importera time-modulen för att använda sleep
 import subprocess
 
 def check_and_install_dependencies():
     """
     Kontrollera och installera nödvändiga beroenden.
-    Installera rclone med apt i LXC-container, annars via curl.
+    Installera rclone alltid via curl och använd apt som fallback om det inte går.
+    Om curl saknas, installera curl först.
     """
     DEPENDENCY_FLAG_FILE = os.path.expanduser("~/.backupbuddy_dependencies_checked")
     INSTALLED_PACKAGES_LOG = os.path.expanduser("~/.backupbuddy_installed_packages.log")
@@ -97,30 +195,25 @@ def check_and_install_dependencies():
         except subprocess.CalledProcessError as e:
             print(f"Failed to install {packages} using {package_manager}: {e}")
 
-    # Installera basberoenden
-    if shutil.which("apt"):
+    # Installera curl om det saknas
+    if "curl" in missing_dependencies:
+        print("curl not found. Installing curl...")
+        install_dependency("apt", ["curl"])
+        missing_dependencies.remove("curl")
+
+    # Installera andra beroenden om de saknas
+    if missing_dependencies:
+        print("Installing missing dependencies...")
         install_dependency("apt", missing_dependencies)
 
-    # Kontrollera om det är en LXC-container
-    is_lxc = False
+    # Installera rclone via curl, med fallback till apt
+    print("\nAttempting to install rclone via curl...")
     try:
-        with open("/proc/1/environ", "r") as f:
-            is_lxc = "container=lxc" in f.read()
-    except FileNotFoundError:
-        pass
-
-    # Installera rclone
-    if is_lxc:
-        print("\nDetected LXC environment. Installing rclone via apt.")
+        subprocess.run("curl https://rclone.org/install.sh | sudo bash", shell=True, check=True)
+        print("rclone installed successfully via curl.")
+    except subprocess.CalledProcessError:
+        print("Failed to install rclone via curl. Falling back to apt.")
         install_dependency("apt", ["rclone"])
-    else:
-        print("\nNon-LXC environment detected. Attempting to install rclone via curl.")
-        try:
-            subprocess.run("curl https://rclone.org/install.sh | sudo bash", shell=True, check=True)
-            print("rclone installed successfully via curl.")
-        except subprocess.CalledProcessError:
-            print("Failed to install rclone via curl. Falling back to apt.")
-            install_dependency("apt", ["rclone"])
 
     # Uppdatera flaggfilen om alla beroenden nu är installerade
     if all(shutil.which(dep) for dep in dependencies + ["rclone"]):
@@ -132,24 +225,11 @@ def check_and_install_dependencies():
         if os.path.exists(DEPENDENCY_FLAG_FILE):
             os.remove(DEPENDENCY_FLAG_FILE)
 
-def list_remotes():
-    """List configured rclone remotes."""
-    try:
-        result = subprocess.run("rclone listremotes", shell=True, text=True, capture_output=True, check=True)
-        remotes = result.stdout.strip().splitlines()
-        if remotes:
-            print("\nAvailable remotes:")
-            for i, remote in enumerate(remotes, start=1):
-                print(f"{i}. {remote}")
-            return remotes
-        else:
-            print("No remotes found. Please configure a remote first.")
-            subprocess.run("rclone config", shell=True)
-            return list_remotes()
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to retrieve remotes: {e}")
-        return []
+#REMOTES#
 
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
 
 def select_remote():
     """Select a remote from the list or configure a new one."""
@@ -205,641 +285,124 @@ def select_remote():
             except ValueError:
                 print("Invalid input. Please enter a number.")
 
+#NAVIGATE#
 
-def generate_backup_script(config, job_id):
-    """
-    Generate a backup script for the specified job, including rclone flags.
-    """
-    job = config[job_id]
-    script_path = os.path.join(SCRIPT_DIR, f"backup_{job_id}.sh")
-    os.makedirs(SCRIPT_DIR, exist_ok=True)
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
 
-    # Include rclone flags
-    rclone_flags = " ".join(f"{flag} {value}" for flag, value in job.get("rclone_flags", {}).items())
-
-    with open(script_path, "w") as script:
-        script.write("#!/bin/bash\n")
-        script.write("set -e\n")
-        script.write("echo 'Starting backup process...'\n")
-
-        # Ensure TEMP_DIR exists
-        script.write(f"if [ ! -d \"{TEMP_DIR}\" ]; then\n")
-        script.write(f"    mkdir -p {TEMP_DIR}\n")
-        script.write("fi\n")
-
-        if job["compress"]:
-            # Compress and split if needed
-            compression_level = job.get("compression_level", 6)
-            script.write("echo 'Compressing files...'\n")
-            script.write(f"tar -cf - -C {job['source_dir']} . | pigz -{compression_level} > {TEMP_DIR}/backup.tar.gz\n")
-            if job["split_files"]:
-                split_size = job.get("split_size", "100M")
-                script.write("echo 'Splitting compressed file...'\n")
-                script.write(f"split -b {split_size} {TEMP_DIR}/backup.tar.gz {TEMP_DIR}/backup-part-\n")
-                script.write(f"rm {TEMP_DIR}/backup.tar.gz\n")
-            script.write(f"rclone copy {TEMP_DIR}/ {job['destination']} {rclone_flags}\n")
-        elif job["split_files"]:
-            # Split without compression
-            split_size = job.get("split_size", "100M")
-            script.write("echo 'Splitting files without compression...'\n")
-            script.write(f"tar -cf {TEMP_DIR}/backup.tar -C {job['source_dir']} .\n")
-            script.write(f"split -b {split_size} {TEMP_DIR}/backup.tar {TEMP_DIR}/backup-part-\n")
-            script.write(f"rm {TEMP_DIR}/backup.tar\n")
-            script.write(f"rclone copy {TEMP_DIR}/ {job['destination']} {rclone_flags}\n")
-        else:
-            # No compression or splitting
-            script.write("echo 'Copying files without compression or splitting...'\n")
-            script.write(f"rclone copy {job['source_dir']} {job['destination']} {rclone_flags}\n")
-
-        script.write("echo 'Cleaning up temporary files...'\n")
-        script.write(f"rm -rf {TEMP_DIR}/*\n")
-        script.write("echo 'Backup completed.'\n")
-
-    os.chmod(script_path, 0o755)
-    return script_path
-
-
-
-def generate_restore_script(config, job_id):
-    """Generate a restore script for the specified job."""
-    job = config[job_id]
-    target_dir = job["source_dir"]
-    script_path = os.path.join(SCRIPT_DIR, f"restore_{job_id}.sh")
-    os.makedirs(SCRIPT_DIR, exist_ok=True)
-
-    with open(script_path, "w") as script:
-        script.write("#!/bin/bash\n")
-        script.write("set -e\n")
-        script.write(f"echo 'Starting restore process...'\n")
-
-        # Ladda ner från remote
-        script.write("echo 'Downloading files from remote...'\n")
-        script.write(f"rclone copy {job['destination']} {TEMP_DIR} --progress --log-level INFO --ignore-times --retries 1\n")
-
-        # Kontrollera att split-filer finns
-        if job.get("split_files"):
-            script.write("echo 'Checking for split files...'\n")
-            script.write(f"if ls {TEMP_DIR}/backup-part-* 1> /dev/null 2>&1; then\n")
-            script.write("    echo 'Split files found. Reassembling...'\n")
-            script.write(f"    cat {TEMP_DIR}/backup-part-* > {TEMP_DIR}/backup.tar.gz\n")
-            script.write(f"    rm {TEMP_DIR}/backup-part-* || true\n")
-            script.write("else\n")
-            script.write("    echo 'Error: No split files found!'\n")
-            script.write("    exit 1\n")
-            script.write("fi\n")
-
-        # Extrahera om komprimering används
-        if job.get("compress"):
-            script.write("echo 'Extracting compressed files...'\n")
-            script.write(f"mkdir -p {target_dir}\n")
-            script.write(f"tar -xzf {TEMP_DIR}/backup.tar.gz -C {target_dir}\n")
-            script.write(f"rm {TEMP_DIR}/backup.tar.gz\n")
-        else:
-            script.write("echo 'Restoring files without compression...'\n")
-            script.write(f"cp -r {TEMP_DIR}/* {target_dir}/\n")
-
-        script.write("echo 'Cleaning up temporary files...'\n")
-        script.write(f"rm -rf {TEMP_DIR}/*\n")
-        script.write("echo 'Restore completed.'\n")
-
-    os.chmod(script_path, 0o755)
-    return script_path
-
-
-
-
-def generate_transfer_script(config, job_id):
-    """Generate a transfer script for the specified job."""
-    job = config[job_id]
-    script_path = os.path.join(SCRIPT_DIR, f"transfer_{job_id}.sh")
-    os.makedirs(SCRIPT_DIR, exist_ok=True)
-
-    with open(script_path, "w") as script:
-        script.write("#!/bin/bash\n")
-        script.write("set -e\n")
-        script.write(f"echo 'Starting transfer process for job {job_id}...'\n")
-
-        source = job["source"]
-        destination = job["destination"]
-
-        script.write(f"rclone copy {source} {destination} --progress --log-level INFO\n")
-
-        script.write("echo 'Transfer completed.'\n")
-
-    os.chmod(script_path, 0o755)
-    return script_path
-
-
-
-def clear_configurations():
-    """Clear configurations: Backup jobs, remotes, or all data."""
-    config = load_config()
-
-    print("\nWhat do you want to clear?")
-    print("1. Clear all remotes (rclone config)")
-    print("2. Clear a specific job")
-    print("3. Clear all jobs")
-    print("4. Clear temporary files")
-    print("5. Cancel")
-    choice = input("Enter your choice (1/2/3/4/5): ").strip()
-
-    if choice == "1":
-        print("\nClearing all remotes using rclone config...")
-        subprocess.run("rclone config", shell=True)
-        print("Remotes cleared. You can now configure new remotes.")
-    elif choice == "2":
-        if not config:
-            print("No jobs found to clear.")
-            return
-        print("\nConfigured jobs:")
-        for i, job_id in enumerate(config.keys(), start=1):
-            print(f"{i}. {job_id}")
-        try:
-            job_choice = int(input("\nEnter the number of the job to delete: ").strip()) - 1
-            if job_choice < 0 or job_choice >= len(config):
-                print("Invalid choice. Returning to main menu.")
-                return
-            job_id = list(config.keys())[job_choice]
-            print(f"\nDeleting job: {job_id}")
-            del config[job_id]
-            save_config(config)
-            print(f"Job '{job_id}' deleted successfully.")
-        except (ValueError, IndexError):
-            print("Invalid input. Returning to main menu.")
-    elif choice == "3":
-        confirm = input("Are you sure you want to clear all jobs? (yes/no): ").strip().lower()
-        if confirm == "yes":
-            os.remove(CONFIG_FILE)
-            print("All jobs cleared.")
-        else:
-            print("Operation canceled.")
-    elif choice == "4":
-        confirm = input("Are you sure you want to clear all temporary files? (yes/no): ").strip().lower()
-        if confirm == "yes":
-            subprocess.run(f"rm -rf {TEMP_DIR}/*", shell=True, check=True)
-            print("Temporary files cleared.")
-        else:
-            print("Operation canceled.")
-    elif choice == "5":
-        print("Returning to main menu.")
-    else:
-        print("Invalid choice. Returning to main menu.")
-
-
-def display_logo():
-    """
-    Display a red ASCII logo next to the welcome message.
-    """
-    # ANSI Escape Code för röd färg
-    RED = "\033[31m"
-    RESET = "\033[0m"  # Återställ till standardfärg
-
-    ascii_logo = rf"""
-     {RED} _________________
-    | | ____My_____ |o|
-    | | ____Old____ | |
-    | | _Pictures__ | |
-    | | _____&_____ | |
-    | |____Taxes____| |
-    |     _______     |
-    |    |       |   ||
-    | DD |       |   V|
-    |____|_______|____|{RESET}
-    """
-    print(".............................................................")
-    print("psst, look here:")
-    print("Have you considered trying out Parrot OS Sec/Home or HTB edition?")
-    print("Find them here: https://www.parrotsec.org\n")
-    print("\n===============================================")
-    print("Welcome to BackupBuddy!                      ||")
-    print("Let's back up your files and keep them safe. ||")
-    print("===============================================")
-    print(ascii_logo)
-    print("For help regarding BackupBuddy, check: https://github.com/TubalQ/BackupBuddy")
-    print("Good Luck & check option 8 for help // Best regards T-Q https://t-vault.se")
-def main():
-    """
-    Main program to handle backup and restore operations.
-    """
-    check_and_install_dependencies()
-
-    # Display the ASCII logo and welcome message
-    display_logo()
+def navigate_remote_directories(remote_name):
+    """Navigate remote directories and ensure copying happens to the correct path."""
+    current_path = remote_name  # Start from the root of the selected remote
+    YELLOW = '\033[33m'
+    RED = '\033[31m'
+    RESET = '\033[0m'
 
     while True:
-        config = load_config()
-        list_jobs(config)
+        print(f"\n{YELLOW}Current remote directory: {current_path}{RESET}")
 
-        print("\nWhat would you like to do:")
-        print("1. Create a new backup job")
-        print("2. Create a new transfer job")
-        print("3. Restore from an existing backup job")
-        print("4. Rerun an existing job")
-        print("5. Manage cron jobs")
-        print("6. Clear configurations and data")
-        print("7. Add a new remote or local path")
-        print("8. Uninstall BackupBuddy")
-        print("9. Help")
-        print("10. Exit")
-        
-        choice = input("Enter your choice (1-10): ").strip()
-
-        if choice == "1":
-            create_backup_job(config)
-        elif choice == "2":
-            create_transfer(config)
-        elif choice == "3":
-            restore_backup_job(config)
-        elif choice == "4":
-            rerun_job(config)
-        elif choice == "5":
-            edit_cron_jobs()
-        elif choice == "6":
-            clear_configurations()
-        elif choice == "7":
-            manage_remotes_and_paths()
-        elif choice == "8":
-            uninstall_backupbuddy()
-        elif choice == "9":
-            show_help()
-        elif choice == "10":
-            print("Goodbye! Thanks for using BackupBuddy.")
-            break
-        else:
-            print("Invalid choice. Try again.")
-
-
-import os
-
-def create_backup_job(config):
-    """
-    Guide user through creating a new backup job with rclone flag configuration.
-    """
-    print("\nCreating a new backup job.")
-    job_id = input("Enter a unique ID for the backup job: ").strip()
-
-    # Select source directory
-    print("\nNavigate to select the source directory (local).")
-    source_dir = navigate_local_directories()
-
-    # Select remote and destination
-    print("\nNavigate to select the destination directory (remote).")
-    remote_name = select_remote()
-    if remote_name.lower() == "b":
-        print("Operation canceled.")
-        return
-    destination_path = navigate_remote_directories(remote_name)
-
-    # Ask about compression and splitting
-    compress = input("Do you want to compress files? (yes/no): ").strip().lower() == "yes"
-    compression_level = None
-    if compress:
-        compression_level = int(input("Enter compression level (1=low, 9=high, default: 6): ").strip() or 6)
-
-    split_files = input("Do you want to split files? (yes/no): ").strip().lower() == "yes"
-    split_size = None
-    if split_files:
-        split_size = input("Enter maximum size per part (e.g., 10M, 1G, default: 100M): ").strip() or "100M"
-
-    cores = None
-    if compress or split_files:
-        cores = int(input("Enter the number of CPU cores to use (default: 4): ").strip() or 4)
-
-    # Configure rclone flags
-    print("\nConfigure rclone flags for this job (Press Enter to use default values):")
-    default_flags = {
-        "--tpslimit": "2",
-        "--tpslimit-burst": "1",
-        "--transfers": "2",
-        "--checkers": "1",
-        "--low-level-retries": "3",
-        "--retries": "5",
-        "--log-file": f"{job_id}_rclone.log",
-        "--log-level": "INFO",
-    }
-    for flag, value in default_flags.items():
-        new_value = input(f"{flag} (default: {value}): ").strip()
-        if new_value:
-            default_flags[flag] = new_value
-
-    # Save the configuration
-    config[job_id] = {
-        "source_dir": source_dir,
-        "destination": destination_path,
-        "compress": compress,
-        "compression_level": compression_level,
-        "split_files": split_files,
-        "split_size": split_size,
-        "cores": cores,
-        "rclone_flags": default_flags,  # Save flags in the job configuration
-    }
-    save_config(config)
-
-    # Generate and run the backup script
-    script_path = generate_backup_script(config, job_id)
-    print(f"Backup script generated: {script_path}")
-
-    try:
-        print(f"Running the backup job {job_id}...")
-        subprocess.run([script_path], shell=True, check=True)
-        print("Backup job completed successfully.")
-    except subprocess.CalledProcessError as e:
-        print(f"Error occurred while running the backup job: {e}")
-
-    # Ask about cron-job setup
-    schedule_cron(config[job_id])
-
-
-def create_transfer(config):
-    """Guide user through creating a new transfer job."""
-    print("\nCreating a new transfer job.")
-    job_id = input("Enter a unique ID for the transfer job: ").strip()
-
-    # Välj source (lokal eller remote)
-    print("\nSelect the source:")
-    print("1. Local directory")
-    print("2. Remote")
-    source_type = input("Enter your choice (1/2): ").strip()
-
-    if source_type == "1":
-        print("\nNavigate to select the source directory (local).")
-        source = navigate_local_directories()
-    elif source_type == "2":
-        print("\nSelect the source remote:")
-        source_remote = select_remote()
-        if source_remote.lower() == "b":
-            print("Operation canceled.")
-            return
-        source = navigate_remote_directories(source_remote)
-    else:
-        print("Invalid choice. Returning to main menu.")
-        return
-
-    # Välj destination (lokal eller remote)
-    print("\nSelect the destination:")
-    print("1. Local directory")
-    print("2. Remote")
-    destination_type = input("Enter your choice (1/2): ").strip()
-
-    if destination_type == "1":
-        print("\nNavigate to select the destination directory (local).")
-        destination = navigate_local_directories()
-    elif destination_type == "2":
-        print("\nSelect the destination remote:")
-        destination_remote = select_remote()
-        if destination_remote.lower() == "b":
-            print("Operation canceled.")
-            return
-        destination = navigate_remote_directories(destination_remote)
-    else:
-        print("Invalid choice. Returning to main menu.")
-        return
-
-    # Spara konfigurationen
-    config[job_id] = {
-        "source": source,
-        "destination": destination,
-        "type": "transfer",  # Mark this as a transfer job
-    }
-    save_config(config)
-
-    # Generera och kör överföringsskript
-    script_path = generate_transfer_script(config, job_id)
-    print(f"Transfer script generated: {script_path}")
-
-    try:
-        print(f"Running the transfer job {job_id}...")
-        subprocess.run([script_path], shell=True, check=True)
-        print("Transfer job completed successfully.")
-    except subprocess.CalledProcessError as e:
-        print(f"Error occurred while running the transfer job: {e}")
-
-    configure_cron_job(config, job_id)
-
-
-def restore_backup_job(config):
-    """Guide user through restoring a backup job."""
-    while True:
-        if not config:
-            print("No backup jobs are configured. Create a backup job first.")
-            return
-
-        print("\nAvailable backup jobs: (Enter 'b' to go back)")
-        for i, job_id in enumerate(config.keys(), start=1):
-            print(f"{i}. {job_id}")
-        selected_job = input("Select a job to restore from: ").strip()
-        if selected_job.lower() == "b":
-            return
-
+        # Försök lista kataloger i den aktuella sökvägen
         try:
-            selected_job = int(selected_job) - 1
-            if selected_job < 0 or selected_job >= len(config):
-                print("Invalid choice. Try again.")
-                continue
-            job_id = list(config.keys())[selected_job]
+            result = subprocess.run(
+                ["rclone", "lsd", current_path],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            remote_directories = [
+                line.split()[-1] for line in result.stdout.strip().splitlines()
+            ]  # Extrahera katalognamn
+        except subprocess.CalledProcessError:
+            remote_directories = []  # Om katalogen är tom, lämna listan tom
 
-            job_data = config[job_id]
-            print(f"\nRestoring job '{job_id}':")
-            print(f"- Source directory: {job_data['source_dir']}")
-            print(f"- Destination: {job_data['destination']}")
-            print(f"- Encrypted: {job_data.get('encrypt', False)}")
-            print(f"- Compressed: {job_data.get('compress', False)}")
-            print(f"- Split files: {job_data.get('split_files', False)}")
+        # Visa vilken katalog vi är i
+        print(f"\n{YELLOW}You are currently in:{RESET} {current_path}")
 
-            if job_data.get("encrypt"):
-                print("Note: This job is encrypted. You will need to provide the decryption password during restore.")
+        # Hantera tomma kataloger
+        if not remote_directories:
+            print(f"{RED}No directories found in this location.{RESET}")
+        else:
+            # Lista kataloger
+            print(f"\n{RED}Remote Directories:{RESET}")
+            for idx, directory in enumerate(remote_directories, start=1):
+                print(f"{RED}{idx}. {directory}{RESET}")
 
-            # Generate and run the restore script
-            script_path = generate_restore_script(config, job_id)
-            print(f"Restore script generated: {script_path}")
+        # Alternativ
+        print(f"\n{YELLOW}0.{RESET} Select this location")
+        print(f"{YELLOW}b.{RESET} Go back")
+        print(f"{YELLOW}c.{RESET} Enter a custom remote directory path")
+        print(f"{YELLOW}d.{RESET} Create a new directory")
+        print(f"{YELLOW}e.{RESET} Copy files to this location")
+
+        choice = input("\nEnter your choice: ").strip()
+
+        if choice == "0":
+            # Bekräfta valet av den aktuella katalogen
+            print(f"{YELLOW}You have selected the current location: {current_path}{RESET}")
+            return current_path
+        elif choice.lower() == "b":
+            # Gå tillbaka till föregående katalog
+            if current_path != remote_name:
+                current_path = current_path.rstrip('/').rsplit('/', 1)[0]
+            else:
+                print("You are already at the root remote directory.")
+        elif choice.lower() == "c":
+            # Ange en anpassad sökväg
+            custom_path = input("Enter the custom remote directory path: ").strip()
+            if custom_path.startswith(remote_name):
+                current_path = custom_path
+            else:
+                current_path = f"{remote_name}/{custom_path}".rstrip("/")
+        elif choice.lower() == "d":
+            # Skapa en ny katalog direkt på remote
+            new_dir = input("Enter the name for the new directory: ").strip()
+            if new_dir:
+                try:
+                    # Bygg sökvägen baserat på current_path utan duplicering
+                    new_dir_path = f"{current_path.rstrip('/')}/{new_dir}".lstrip("/")
+                    
+                    # Kör rclone mkdir med den rätta vägen
+                    subprocess.run(["rclone", "mkdir", new_dir_path], check=True)
+                    print(f"{YELLOW}New directory '{new_dir}' created successfully at {new_dir_path}.{RESET}")
+                    
+                    # Uppdatera current_path till den nyskapade katalogen
+                    current_path = new_dir_path
+                    print(f"{YELLOW}Now in the new directory: {current_path}{RESET}")
+                except subprocess.CalledProcessError as e:
+                    print(f"{RED}Error creating directory: {e.stderr}{RESET}")
+            else:
+                print(f"{RED}Directory name cannot be empty.{RESET}")
+        elif choice.lower() == "e":
+            # Kopiera filer till den aktuella katalogen
+            source_path = input("Enter the local path of the files to copy: ").strip()
+            if source_path:
+                try:
+                    print(f"{YELLOW}Copying files from {source_path} to {current_path}{RESET}")
+                    subprocess.run(["rclone", "copy", source_path, current_path], check=True)
+                    print(f"{YELLOW}Files successfully copied to {current_path}.{RESET}")
+                except subprocess.CalledProcessError as e:
+                    print(f"{RED}Error copying files: {e.stderr}{RESET}")
+            else:
+                print(f"{RED}Source path cannot be empty.{RESET}")
+        else:
             try:
-                subprocess.run([script_path], shell=True, check=True)
-                print("Restore completed successfully.")
-            except subprocess.CalledProcessError as e:
-                print(f"Error occurred while running the restore job: {e}")
-            return
-        except ValueError:
-            print("Invalid input. Enter a number.")
-
-def rerun_job(config):
-    """Rerun an existing backup or transfer job."""
-    if not config:
-        print("No jobs found to rerun.")
-        return
-
-    print("\nExisting jobs:")
-    for i, job_id in enumerate(config.keys(), start=1):
-        job = config[job_id]
-        job_type = "Transfer" if job.get("type") == "transfer" else "Backup"
-        print(f"{i}. [{job_type}] {job_id} - Source: {job.get('source_dir', job.get('source'))}, Destination: {job['destination']}")
-
-    try:
-        choice = int(input("\nEnter the number of the job to rerun: ").strip()) - 1
-        if choice < 0 or choice >= len(config):
-            print("Invalid choice. Returning to main menu.")
-            return
-
-        job_id = list(config.keys())[choice]
-        print(f"Rerunning job: {job_id}")
-        script_path = os.path.join(SCRIPT_DIR, f"{'transfer' if config[job_id].get('type') == 'transfer' else 'backup'}_{job_id}.sh")
-        
-        if not os.path.exists(script_path):
-            print(f"Error: Script for job {job_id} does not exist. Please recreate the job.")
-            return
-
-        try:
-            print(f"Running the job {job_id}...")
-            subprocess.run([script_path], shell=True, check=True)
-            print("Job completed successfully.")
-        except subprocess.CalledProcessError as e:
-            print(f"Error occurred while running the job: {e}")
-    except ValueError:
-        print("Invalid input. Returning to main menu.")
-
-
-def configure_cron_job(config, job_id):
-    """Prompt user to set up a cron job for the specified job."""
-    setup_cron = input("Do you want to schedule this job with a cron job? (yes/no): ").strip().lower()
-    if setup_cron != "yes":
-        print("Skipping cron job setup.")
-        return
-
-    print("\nCron Job Mode:")
-    print("1. `copy`: Ensures files in the source are copied to the destination. Doesn't remove extra files from the destination.")
-    print("2. `sync`: Synchronizes the source -> destination. Extra files in the destination will be removed.")
-    cron_mode = input("Do you want to use 'copy' or 'sync' for the cron job? (default: copy): ").strip().lower()
-    if cron_mode not in ["copy", "sync"]:
-        cron_mode = "copy"
-
-    print("\nSet up your cron schedule:")
-    minute = input("Enter the minute (0-59, default: 0): ").strip() or "0"
-    hour = input("Enter the hour (0-23, default: 0): ").strip() or "0"
-    day_of_month = input("Enter the day of the month (1-31, default: * for every day): ").strip() or "*"
-    month = input("Enter the month (1-12, default: * for every month): ").strip() or "*"
-    day_of_week = input("Enter the day of the week (0=Sunday, 6=Saturday, default: * for every day): ").strip() or "*"
-
-    schedule = f"{minute} {hour} {day_of_month} {month} {day_of_week}"
-    job = config[job_id]
-
-    source = job.get("source") or job.get("source_dir")
-    destination = job["destination"]
-    cron_command = f"rclone {cron_mode} {source} {destination} --progress --log-level INFO"
-    cron_job = f"{schedule} {cron_command}"
-
-    print(f"\nAdding the following cron job:\n{cron_job}")
-    subprocess.run(f"(crontab -l 2>/dev/null; echo \"{cron_job}\") | crontab -", shell=True, check=True)
-    print("Cron job added successfully.")
-
-
-def edit_cron_jobs():
-    """List, edit, or delete existing cron jobs."""
-    print("\nManaging cron jobs...\n")
-    
-    # Läs befintliga cron-jobb
-    try:
-        result = subprocess.run("crontab -l", shell=True, text=True, capture_output=True, check=True)
-        cron_jobs = result.stdout.strip().split("\n")
-    except subprocess.CalledProcessError:
-        print("No cron jobs found.")
-        return
-
-    if not cron_jobs:
-        print("No cron jobs found.")
-        return
-
-    print("\nExisting cron jobs:")
-    for i, job in enumerate(cron_jobs, start=1):
-        print(f"{i}. {job}")
-    
-    print("\nWhat would you like to do:")
-    print("1. Edit a cron job")
-    print("2. Delete a cron job")
-    print("3. Cancel")
-    choice = input("Enter your choice (1/2/3): ").strip()
-
-    if choice == "1":
-        # Edit a cron job
-        try:
-            job_index = int(input("Enter the number of the job to edit: ").strip()) - 1
-            if job_index < 0 or job_index >= len(cron_jobs):
-                print("Invalid choice. Returning to main menu.")
-                return
-            print(f"\nEditing job: {cron_jobs[job_index]}")
-            
-            # Extrahera och låt användaren justera schemat
-            parts = cron_jobs[job_index].split(maxsplit=5)
-            if len(parts) < 6:
-                print("Invalid cron job format. Skipping.")
-                return
-            
-            print("Enter new values or press Enter to keep the current value:")
-            minute = input(f"Minute (current: {parts[0]}): ").strip() or parts[0]
-            hour = input(f"Hour (current: {parts[1]}): ").strip() or parts[1]
-            day_of_month = input(f"Day of month (current: {parts[2]}): ").strip() or parts[2]
-            month = input(f"Month (current: {parts[3]}): ").strip() or parts[3]
-            day_of_week = input(f"Day of week (current: {parts[4]}): ").strip() or parts[4]
-            command = " ".join(parts[5:])
-            
-            # Skapa det uppdaterade cron-jobbet
-            updated_job = f"{minute} {hour} {day_of_month} {month} {day_of_week} {command}"
-            cron_jobs[job_index] = updated_job
-            print(f"\nUpdated job: {updated_job}")
-
-            # Skriv tillbaka till crontab
-            subprocess.run(
-                f"echo '{chr(10).join(cron_jobs)}' | crontab -",
-                shell=True,
-                check=True,
-            )
-            print("Cron job updated successfully.")
-        except ValueError:
-            print("Invalid input. Returning to main menu.")
-        except IndexError:
-            print("Invalid choice. Returning to main menu.")
-    elif choice == "2":
-        # Delete a cron job
-        try:
-            job_index = int(input("Enter the number of the job to delete: ").strip()) - 1
-            if job_index < 0 or job_index >= len(cron_jobs):
-                print("Invalid choice. Returning to main menu.")
-                return
-            print(f"\nDeleting job: {cron_jobs[job_index]}")
-            del cron_jobs[job_index]
-            
-            # Skriv tillbaka till crontab
-            subprocess.run(
-                f"echo '{chr(10).join(cron_jobs)}' | crontab -",
-                shell=True,
-                check=True,
-            )
-            print("Cron job deleted successfully.")
-        except ValueError:
-            print("Invalid input. Returning to main menu.")
-        except IndexError:
-            print("Invalid choice. Returning to main menu.")
-    elif choice == "3":
-        print("Returning to main menu.")
-    else:
-        print("Invalid choice. Returning to main menu.")
-
-def validate_flag_value(flag, value):
-    """
-    Validera inmatade värden för rclone-flaggor.
-    """
-    try:
-        if flag in ["--tpslimit", "--tpslimit-burst", "--transfers", "--checkers", "--low-level-retries", "--retries"]:
-            value = int(value)
-            if value < 1:
-                raise ValueError(f"{flag} must be greater than 0.")
-        return value
-    except ValueError as e:
-        print(f"Invalid value for {flag}: {e}")
-        return None
-
-
+                choice = int(choice)
+                if 1 <= choice <= len(remote_directories):
+                    # Navigera till vald katalog
+                    selected_directory = remote_directories[choice - 1]
+                    current_path = f"{current_path.rstrip('/')}/{selected_directory}".rstrip("/")
+                    print(f"{YELLOW}Now in the directory: {current_path}{RESET}")
+                else:
+                    print("Invalid choice. Try again.")
+            except ValueError:
+                print("Invalid input. Please enter a number.")
 
 import subprocess
 import os
+
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
 
 def navigate_local_directories():
     """Let the user navigate local directories with current directory marked in yellow."""
@@ -960,184 +523,505 @@ def navigate_local_directories():
             print(f"Error retrieving local directories: {e}")
             return None
 
+#CREATE#
+
+import os
+
 import subprocess
 import time  # Importera time-modulen för att använda sleep
 import subprocess
 
-def navigate_remote_directories(remote_name):
-    """Navigate remote directories and ensure copying happens to the correct path."""
-    current_path = remote_name  # Start from the root of the selected remote
-    YELLOW = '\033[33m'
-    RED = '\033[31m'
-    RESET = '\033[0m'
+def create_backup_job(config):
+    """
+    Guide user through creating a new backup job with rclone flag configuration.
+    """
+    print("\nCreating a new backup job.")
+    job_id = input("Enter a unique ID for the backup job: ").strip()
 
+    # Select source directory
+    print("\nNavigate to select the source directory (local).")
+    source_dir = navigate_local_directories()
+
+    # Select remote and destination
+    print("\nNavigate to select the destination directory (remote).")
+    remote_name = select_remote()
+    if remote_name.lower() == "b":
+        print("Operation canceled.")
+        return
+    destination_path = navigate_remote_directories(remote_name)
+
+    # Ask about compression and splitting
+    compress = input("Do you want to compress files? (yes/no): ").strip().lower() == "yes"
+    compression_level = None
+    if compress:
+        compression_level = int(input("Enter compression level (1=low, 9=high, default: 6): ").strip() or 6)
+
+    split_files = input("Do you want to split files? (yes/no): ").strip().lower() == "yes"
+    split_size = None
+    if split_files:
+        split_size = input("Enter maximum size per part (e.g., 10M, 1G, default: 100M): ").strip() or "100M"
+
+    cores = None
+    if compress or split_files:
+        cores = int(input("Enter the number of CPU cores to use (default: 4): ").strip() or 4)
+
+    # Configure rclone flags
+    print("\nConfigure rclone flags for this job (Press Enter to use default values):")
+    default_flags = {
+        "--tpslimit": "2",
+        "--tpslimit-burst": "1",
+        "--transfers": "2",
+        "--checkers": "1",
+        "--low-level-retries": "3",
+        "--retries": "5",
+        "--log-file": f"{job_id}_rclone.log",
+        "--log-level": "INFO",
+    }
+    for flag, value in default_flags.items():
+        new_value = input(f"{flag} (default: {value}): ").strip()
+        if new_value:
+            default_flags[flag] = new_value
+
+    # Save the configuration
+    config[job_id] = {
+        "source_dir": source_dir,
+        "destination": destination_path,
+        "compress": compress,
+        "compression_level": compression_level,
+        "split_files": split_files,
+        "split_size": split_size,
+        "cores": cores,
+        "rclone_flags": default_flags,  # Save flags in the job configuration
+    }
+    save_config(config)
+
+    # Generate and run the backup script
+    script_path = generate_backup_script(config, job_id)
+    print(f"Backup script generated: {script_path}")
+
+    try:
+        print(f"Running the backup job {job_id}...")
+        subprocess.run([script_path], shell=True, check=True)
+        print("Backup job completed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error occurred while running the backup job: {e}")
+
+    # Ask about cron-job setup
+    schedule_cron(config[job_id])
+
+
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
+
+def create_transfer(config):
+    """Guide user through creating a new transfer job."""
+    print("\nCreating a new transfer job.")
+    job_id = input("Enter a unique ID for the transfer job: ").strip()
+
+    # Välj source (lokal eller remote)
+    print("\nSelect the source:")
+    print("1. Local directory")
+    print("2. Remote")
+    source_type = input("Enter your choice (1/2): ").strip()
+
+    if source_type == "1":
+        print("\nNavigate to select the source directory (local).")
+        source = navigate_local_directories()
+    elif source_type == "2":
+        print("\nSelect the source remote:")
+        source_remote = select_remote()
+        if source_remote.lower() == "b":
+            print("Operation canceled.")
+            return
+        source = navigate_remote_directories(source_remote)
+    else:
+        print("Invalid choice. Returning to main menu.")
+        return
+
+    # Välj destination (lokal eller remote)
+    print("\nSelect the destination:")
+    print("1. Local directory")
+    print("2. Remote")
+    destination_type = input("Enter your choice (1/2): ").strip()
+
+    if destination_type == "1":
+        print("\nNavigate to select the destination directory (local).")
+        destination = navigate_local_directories()
+    elif destination_type == "2":
+        print("\nSelect the destination remote:")
+        destination_remote = select_remote()
+        if destination_remote.lower() == "b":
+            print("Operation canceled.")
+            return
+        destination = navigate_remote_directories(destination_remote)
+    else:
+        print("Invalid choice. Returning to main menu.")
+        return
+
+    # Spara konfigurationen
+    config[job_id] = {
+        "source": source,
+        "destination": destination,
+        "type": "transfer",  # Mark this as a transfer job
+    }
+    save_config(config)
+
+    # Generera och kör överföringsskript
+    script_path = generate_transfer_script(config, job_id)
+    print(f"Transfer script generated: {script_path}")
+
+    try:
+        print(f"Running the transfer job {job_id}...")
+        subprocess.run([script_path], shell=True, check=True)
+        print("Transfer job completed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error occurred while running the transfer job: {e}")
+
+    configure_cron_job(config, job_id)
+
+#GENERATE#
+
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
+
+def generate_backup_script(config, job_id):
+    """
+    Generate a backup script for the specified job, including rclone flags.
+    """
+    job = config[job_id]
+    script_path = os.path.join(SCRIPT_DIR, f"backup_{job_id}.sh")
+    os.makedirs(SCRIPT_DIR, exist_ok=True)
+
+    # Include rclone flags
+    rclone_flags = " ".join(f"{flag} {value}" for flag, value in job.get("rclone_flags", {}).items())
+
+    with open(script_path, "w") as script:
+        script.write("#!/bin/bash\n")
+        script.write("set -e\n")
+        script.write("echo 'Starting backup process...'\n")
+
+        # Ensure TEMP_DIR exists
+        script.write(f"if [ ! -d \"{TEMP_DIR}\" ]; then\n")
+        script.write(f"    mkdir -p {TEMP_DIR}\n")
+        script.write("fi\n")
+
+        if job["compress"]:
+            # Compress and split if needed
+            compression_level = job.get("compression_level", 6)
+            script.write("echo 'Compressing files...'\n")
+            script.write(f"tar -cf - -C {job['source_dir']} . | pigz -{compression_level} > {TEMP_DIR}/backup.tar.gz\n")
+            if job["split_files"]:
+                split_size = job.get("split_size", "100M")
+                script.write("echo 'Splitting compressed file...'\n")
+                script.write(f"split -b {split_size} {TEMP_DIR}/backup.tar.gz {TEMP_DIR}/backup-part-\n")
+                script.write(f"rm {TEMP_DIR}/backup.tar.gz\n")
+            script.write(f"rclone copy {TEMP_DIR}/ {job['destination']} {rclone_flags}\n")
+        elif job["split_files"]:
+            # Split without compression
+            split_size = job.get("split_size", "100M")
+            script.write("echo 'Splitting files without compression...'\n")
+            script.write(f"tar -cf {TEMP_DIR}/backup.tar -C {job['source_dir']} .\n")
+            script.write(f"split -b {split_size} {TEMP_DIR}/backup.tar {TEMP_DIR}/backup-part-\n")
+            script.write(f"rm {TEMP_DIR}/backup.tar\n")
+            script.write(f"rclone copy {TEMP_DIR}/ {job['destination']} {rclone_flags}\n")
+        else:
+            # No compression or splitting
+            script.write("echo 'Copying files without compression or splitting...'\n")
+            script.write(f"rclone copy {job['source_dir']} {job['destination']} {rclone_flags}\n")
+
+        script.write("echo 'Cleaning up temporary files...'\n")
+        script.write(f"rm -rf {TEMP_DIR}/*\n")
+        script.write("echo 'Backup completed.'\n")
+
+    os.chmod(script_path, 0o755)
+    return script_path
+
+
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
+
+def generate_restore_script(config, job_id):
+    """Generate a restore script for the specified job."""
+    job = config[job_id]
+    target_dir = job["source_dir"]
+    script_path = os.path.join(SCRIPT_DIR, f"restore_{job_id}.sh")
+    os.makedirs(SCRIPT_DIR, exist_ok=True)
+
+    with open(script_path, "w") as script:
+        script.write("#!/bin/bash\n")
+        script.write("set -e\n")
+        script.write(f"echo 'Starting restore process...'\n")
+
+        # Ladda ner från remote
+        script.write("echo 'Downloading files from remote...'\n")
+        script.write(f"rclone copy {job['destination']} {TEMP_DIR} --progress --log-level INFO --ignore-times --retries 1\n")
+
+        # Kontrollera att split-filer finns
+        if job.get("split_files"):
+            script.write("echo 'Checking for split files...'\n")
+            script.write(f"if ls {TEMP_DIR}/backup-part-* 1> /dev/null 2>&1; then\n")
+            script.write("    echo 'Split files found. Reassembling...'\n")
+            script.write(f"    cat {TEMP_DIR}/backup-part-* > {TEMP_DIR}/backup.tar.gz\n")
+            script.write(f"    rm {TEMP_DIR}/backup-part-* || true\n")
+            script.write("else\n")
+            script.write("    echo 'Error: No split files found!'\n")
+            script.write("    exit 1\n")
+            script.write("fi\n")
+
+        # Extrahera om komprimering används
+        if job.get("compress"):
+            script.write("echo 'Extracting compressed files...'\n")
+            script.write(f"mkdir -p {target_dir}\n")
+            script.write(f"tar -xzf {TEMP_DIR}/backup.tar.gz -C {target_dir}\n")
+            script.write(f"rm {TEMP_DIR}/backup.tar.gz\n")
+        else:
+            script.write("echo 'Restoring files without compression...'\n")
+            script.write(f"cp -r {TEMP_DIR}/* {target_dir}/\n")
+
+        script.write("echo 'Cleaning up temporary files...'\n")
+        script.write(f"rm -rf {TEMP_DIR}/*\n")
+        script.write("echo 'Restore completed.'\n")
+
+    os.chmod(script_path, 0o755)
+    return script_path
+
+
+
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
+
+def generate_transfer_script(config, job_id):
+    """Generate a transfer script for the specified job."""
+    job = config[job_id]
+    script_path = os.path.join(SCRIPT_DIR, f"transfer_{job_id}.sh")
+    os.makedirs(SCRIPT_DIR, exist_ok=True)
+
+    with open(script_path, "w") as script:
+        script.write("#!/bin/bash\n")
+        script.write("set -e\n")
+        script.write(f"echo 'Starting transfer process for job {job_id}...'\n")
+
+        source = job["source"]
+        destination = job["destination"]
+
+        script.write(f"rclone copy {source} {destination} --progress --log-level INFO\n")
+
+        script.write("echo 'Transfer completed.'\n")
+
+    os.chmod(script_path, 0o755)
+    return script_path
+
+#RESTORE#
+
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
+
+def restore_backup_job(config):
+    """Guide user through restoring a backup job."""
     while True:
-        print(f"\n{YELLOW}Current remote directory: {current_path}{RESET}")
+        if not config:
+            print("No backup jobs are configured. Create a backup job first.")
+            return
 
-        # Försök lista kataloger i den aktuella sökvägen
+        print("\nAvailable backup jobs: (Enter 'b' to go back)")
+        for i, job_id in enumerate(config.keys(), start=1):
+            print(f"{i}. {job_id}")
+        selected_job = input("Select a job to restore from: ").strip()
+        if selected_job.lower() == "b":
+            return
+
         try:
-            result = subprocess.run(
-                ["rclone", "lsd", current_path],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            remote_directories = [
-                line.split()[-1] for line in result.stdout.strip().splitlines()
-            ]  # Extrahera katalognamn
-        except subprocess.CalledProcessError:
-            remote_directories = []  # Om katalogen är tom, lämna listan tom
+            selected_job = int(selected_job) - 1
+            if selected_job < 0 or selected_job >= len(config):
+                print("Invalid choice. Try again.")
+                continue
+            job_id = list(config.keys())[selected_job]
 
-        # Visa vilken katalog vi är i
-        print(f"\n{YELLOW}You are currently in:{RESET} {current_path}")
+            job_data = config[job_id]
+            print(f"\nRestoring job '{job_id}':")
+            print(f"- Source directory: {job_data['source_dir']}")
+            print(f"- Destination: {job_data['destination']}")
+            print(f"- Encrypted: {job_data.get('encrypt', False)}")
+            print(f"- Compressed: {job_data.get('compress', False)}")
+            print(f"- Split files: {job_data.get('split_files', False)}")
 
-        # Hantera tomma kataloger
-        if not remote_directories:
-            print(f"{RED}No directories found in this location.{RESET}")
-        else:
-            # Lista kataloger
-            print(f"\n{RED}Remote Directories:{RESET}")
-            for idx, directory in enumerate(remote_directories, start=1):
-                print(f"{RED}{idx}. {directory}{RESET}")
+            if job_data.get("encrypt"):
+                print("Note: This job is encrypted. You will need to provide the decryption password during restore.")
 
-        # Alternativ
-        print(f"\n{YELLOW}0.{RESET} Select this location")
-        print(f"{YELLOW}b.{RESET} Go back")
-        print(f"{YELLOW}c.{RESET} Enter a custom remote directory path")
-        print(f"{YELLOW}d.{RESET} Create a new directory")
-        print(f"{YELLOW}e.{RESET} Copy files to this location")
-
-        choice = input("\nEnter your choice: ").strip()
-
-        if choice == "0":
-            # Bekräfta valet av den aktuella katalogen
-            print(f"{YELLOW}You have selected the current location: {current_path}{RESET}")
-            return current_path
-        elif choice.lower() == "b":
-            # Gå tillbaka till föregående katalog
-            if current_path != remote_name:
-                current_path = current_path.rstrip('/').rsplit('/', 1)[0]
-            else:
-                print("You are already at the root remote directory.")
-        elif choice.lower() == "c":
-            # Ange en anpassad sökväg
-            custom_path = input("Enter the custom remote directory path: ").strip()
-            if custom_path.startswith(remote_name):
-                current_path = custom_path
-            else:
-                current_path = f"{remote_name}/{custom_path}".rstrip("/")
-        elif choice.lower() == "d":
-            # Skapa en ny katalog direkt på remote
-            new_dir = input("Enter the name for the new directory: ").strip()
-            if new_dir:
-                try:
-                    # Bygg sökvägen baserat på current_path utan duplicering
-                    new_dir_path = f"{current_path.rstrip('/')}/{new_dir}".lstrip("/")
-                    
-                    # Kör rclone mkdir med den rätta vägen
-                    subprocess.run(["rclone", "mkdir", new_dir_path], check=True)
-                    print(f"{YELLOW}New directory '{new_dir}' created successfully at {new_dir_path}.{RESET}")
-                    
-                    # Uppdatera current_path till den nyskapade katalogen
-                    current_path = new_dir_path
-                    print(f"{YELLOW}Now in the new directory: {current_path}{RESET}")
-                except subprocess.CalledProcessError as e:
-                    print(f"{RED}Error creating directory: {e.stderr}{RESET}")
-            else:
-                print(f"{RED}Directory name cannot be empty.{RESET}")
-        elif choice.lower() == "e":
-            # Kopiera filer till den aktuella katalogen
-            source_path = input("Enter the local path of the files to copy: ").strip()
-            if source_path:
-                try:
-                    print(f"{YELLOW}Copying files from {source_path} to {current_path}{RESET}")
-                    subprocess.run(["rclone", "copy", source_path, current_path], check=True)
-                    print(f"{YELLOW}Files successfully copied to {current_path}.{RESET}")
-                except subprocess.CalledProcessError as e:
-                    print(f"{RED}Error copying files: {e.stderr}{RESET}")
-            else:
-                print(f"{RED}Source path cannot be empty.{RESET}")
-        else:
+            # Generate and run the restore script
+            script_path = generate_restore_script(config, job_id)
+            print(f"Restore script generated: {script_path}")
             try:
-                choice = int(choice)
-                if 1 <= choice <= len(remote_directories):
-                    # Navigera till vald katalog
-                    selected_directory = remote_directories[choice - 1]
-                    current_path = f"{current_path.rstrip('/')}/{selected_directory}".rstrip("/")
-                    print(f"{YELLOW}Now in the directory: {current_path}{RESET}")
-                else:
-                    print("Invalid choice. Try again.")
-            except ValueError:
-                print("Invalid input. Please enter a number.")
+                subprocess.run([script_path], shell=True, check=True)
+                print("Restore completed successfully.")
+            except subprocess.CalledProcessError as e:
+                print(f"Error occurred while running the restore job: {e}")
+            return
+        except ValueError:
+            print("Invalid input. Enter a number.")
 
-def manage_remotes_and_paths():
-    """Add new remotes or local paths."""
-    print("\nManage Remotes and Local Paths")
-    print("1. Add a new remote")
-    print("2. Add a new local shortcut")
-    print("3. View existing remotes")
-    print("4. View local shortcuts")
-    print("5. Back to main menu")
+#CRON-JOBS#
 
-    choice = input("Enter your choice (1/2/3/4/5): ").strip()
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
+
+def configure_cron_job(config, job_id):
+    """Prompt user to set up a cron job for the specified job."""
+    setup_cron = input("Do you want to schedule this job with a cron job? (yes/no): ").strip().lower()
+    if setup_cron != "yes":
+        print("Skipping cron job setup.")
+        return
+
+    print("\nCron Job Mode:")
+    print("1. `copy`: Ensures files in the source are copied to the destination. Doesn't remove extra files from the destination.")
+    print("2. `sync`: Synchronizes the source -> destination. Extra files in the destination will be removed.")
+    cron_mode = input("Do you want to use 'copy' or 'sync' for the cron job? (default: copy): ").strip().lower()
+    if cron_mode not in ["copy", "sync"]:
+        cron_mode = "copy"
+
+    print("\nSet up your cron schedule:")
+    minute = input("Enter the minute (0-59, default: 0): ").strip() or "0"
+    hour = input("Enter the hour (0-23, default: 0): ").strip() or "0"
+    day_of_month = input("Enter the day of the month (1-31, default: * for every day): ").strip() or "*"
+    month = input("Enter the month (1-12, default: * for every month): ").strip() or "*"
+    day_of_week = input("Enter the day of the week (0=Sunday, 6=Saturday, default: * for every day): ").strip() or "*"
+
+    schedule = f"{minute} {hour} {day_of_month} {month} {day_of_week}"
+    job = config[job_id]
+
+    source = job.get("source") or job.get("source_dir")
+    destination = job["destination"]
+    cron_command = f"rclone {cron_mode} {source} {destination} --progress --log-level INFO"
+    cron_job = f"{schedule} {cron_command}"
+
+    print(f"\nAdding the following cron job:\n{cron_job}")
+    subprocess.run(f"(crontab -l 2>/dev/null; echo \"{cron_job}\") | crontab -", shell=True, check=True)
+    print("Cron job added successfully.")
+
+
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
+
+def edit_cron_jobs():
+    """List, edit, or delete existing cron jobs."""
+    print("\nManaging cron jobs...\n")
+    
+    # Läs befintliga cron-jobb
+    try:
+        result = subprocess.run("crontab -l", shell=True, text=True, capture_output=True, check=True)
+        cron_jobs = result.stdout.strip().split("\n")
+    except subprocess.CalledProcessError:
+        print("No cron jobs found.")
+        return
+
+    if not cron_jobs:
+        print("No cron jobs found.")
+        return
+
+    print("\nExisting cron jobs:")
+    for i, job in enumerate(cron_jobs, start=1):
+        print(f"{i}. {job}")
+    
+    print("\nWhat would you like to do:")
+    print("1. Edit a cron job")
+    print("2. Delete a cron job")
+    print("3. Cancel")
+    choice = input("Enter your choice (1/2/3): ").strip()
 
     if choice == "1":
-        print("\nAdding a new remote...")
+        # Edit a cron job
         try:
-            subprocess.run("rclone config", shell=True, check=True)
-            print("New remote added successfully.")
-        except subprocess.CalledProcessError as e:
-            print(f"Error adding remote: {e.stderr}")
+            job_index = int(input("Enter the number of the job to edit: ").strip()) - 1
+            if job_index < 0 or job_index >= len(cron_jobs):
+                print("Invalid choice. Returning to main menu.")
+                return
+            print(f"\nEditing job: {cron_jobs[job_index]}")
+            
+            # Extrahera och låt användaren justera schemat
+            parts = cron_jobs[job_index].split(maxsplit=5)
+            if len(parts) < 6:
+                print("Invalid cron job format. Skipping.")
+                return
+            
+            print("Enter new values or press Enter to keep the current value:")
+            minute = input(f"Minute (current: {parts[0]}): ").strip() or parts[0]
+            hour = input(f"Hour (current: {parts[1]}): ").strip() or parts[1]
+            day_of_month = input(f"Day of month (current: {parts[2]}): ").strip() or parts[2]
+            month = input(f"Month (current: {parts[3]}): ").strip() or parts[3]
+            day_of_week = input(f"Day of week (current: {parts[4]}): ").strip() or parts[4]
+            command = " ".join(parts[5:])
+            
+            # Skapa det uppdaterade cron-jobbet
+            updated_job = f"{minute} {hour} {day_of_month} {month} {day_of_week} {command}"
+            cron_jobs[job_index] = updated_job
+            print(f"\nUpdated job: {updated_job}")
+
+            # Skriv tillbaka till crontab
+            subprocess.run(
+                f"echo '{chr(10).join(cron_jobs)}' | crontab -",
+                shell=True,
+                check=True,
+            )
+            print("Cron job updated successfully.")
+        except ValueError:
+            print("Invalid input. Returning to main menu.")
+        except IndexError:
+            print("Invalid choice. Returning to main menu.")
     elif choice == "2":
-        print("\nAdding a new local shortcut...")
-        shortcut_path = input("Enter the path for the new local shortcut: ").strip()
-        if os.path.exists(shortcut_path):
-            with open("local_shortcuts.txt", "a") as file:
-                file.write(shortcut_path + "\n")
-            print(f"New local shortcut '{shortcut_path}' added successfully.")
-        else:
-            print(f"Error: The path '{shortcut_path}' does not exist.")
+        # Delete a cron job
+        try:
+            job_index = int(input("Enter the number of the job to delete: ").strip()) - 1
+            if job_index < 0 or job_index >= len(cron_jobs):
+                print("Invalid choice. Returning to main menu.")
+                return
+            print(f"\nDeleting job: {cron_jobs[job_index]}")
+            del cron_jobs[job_index]
+            
+            # Skriv tillbaka till crontab
+            subprocess.run(
+                f"echo '{chr(10).join(cron_jobs)}' | crontab -",
+                shell=True,
+                check=True,
+            )
+            print("Cron job deleted successfully.")
+        except ValueError:
+            print("Invalid input. Returning to main menu.")
+        except IndexError:
+            print("Invalid choice. Returning to main menu.")
     elif choice == "3":
-        print("\nExisting remotes:")
-        try:
-            result = subprocess.run(["rclone", "listremotes"], capture_output=True, text=True, check=True)
-            remotes = result.stdout.strip().splitlines()
-            if remotes:
-                for remote in remotes:
-                    print(f"- {remote}")
-            else:
-                print("No remotes configured yet.")
-        except subprocess.CalledProcessError as e:
-            print(f"Error listing remotes: {e.stderr}")
-    elif choice == "4":
-        print("\nExisting local shortcuts:")
-        try:
-            with open("local_shortcuts.txt", "r") as file:
-                shortcuts = file.readlines()
-                if shortcuts:
-                    for shortcut in shortcuts:
-                        print(f"- {shortcut.strip()}")
-                else:
-                    print("No local shortcuts configured yet.")
-        except FileNotFoundError:
-            print("No local shortcuts configured yet.")
-    elif choice == "5":
         print("Returning to main menu.")
     else:
         print("Invalid choice. Returning to main menu.")
 
-def run_command(command):
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
+
+def validate_flag_value(flag, value):
     """
-    Kör ett kommando med eller utan sudo beroende på om scriptet körs som root.
+    Validera inmatade värden för rclone-flaggor.
     """
-    if os.geteuid() != 0:
-        command = f"sudo {command}"
     try:
-        subprocess.run(command, shell=True, check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Error executing command: {command}\n{e}")
-        raise
-    
+        if flag in ["--tpslimit", "--tpslimit-burst", "--transfers", "--checkers", "--low-level-retries", "--retries"]:
+            value = int(value)
+            if value < 1:
+                raise ValueError(f"{flag} must be greater than 0.")
+        return value
+    except ValueError as e:
+        print(f"Invalid value for {flag}: {e}")
+        return None
+
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
+
 def schedule_cron(job):
     """
     Add a cron job to root's crontab, reusing the rclone flags stored in the job configuration.
@@ -1183,79 +1067,127 @@ def schedule_cron(job):
     except subprocess.CalledProcessError as e:
         print(f"Failed to add cron job: {e}")
 
+#MISCS#
 
-def show_help():
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
+
+def run_command(command):
     """
-    Open the help section in a new terminal window.
+    Kör ett kommando med eller utan sudo beroende på om scriptet körs som root.
     """
-    help_content = """
-========================================
-Welcome to the BackupBuddy Help Section!
-========================================
+    if os.geteuid() != 0:
+        command = f"sudo {command}"
+    try:
+        subprocess.run(command, shell=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing command: {command}\n{e}")
+        raise
 
-BackupBuddy is a powerful tool for backing up, restoring, and transferring files 
-between local and cloud-based systems. It supports task scheduling using cron jobs 
-and provides flexible settings to minimize API requests to cloud providers.
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
 
-Key Features:
-1. Create Backups:
-   Back up local files or folders to cloud storage or another local destination.
-2. Restore Backups:
-   Restore files from a backup to your desired destination.
-3. Schedule Tasks:
-   Set up cron jobs to automate backups and transfers.
-4. Configure rclone Remotes:
-   Manage cloud storage accounts and connections via rclone.
-5. Optimize API Requests:
-   Customize rclone flags such as --tpslimit and --transfers to avoid exceeding API limits.
-
-Example Customizable rclone Flags:
-  --tpslimit <number>: Limits the number of API requests per second (default: 2).
-  --tpslimit-burst <number>: Allows a short burst of requests above the limit (default: 1).
-  --transfers <number>: Sets the number of concurrent file transfers (default: 2).
-  --checkers <number>: Sets the number of file checkers to verify file integrity (default: 1).
-  --low-level-retries <number>: Number of retries for low-level errors (default: 3).
-  --retries <number>: Number of retries for the entire operation (default: 5).
-  --log-file <file>: Specifies the log file for rclone operations (default: rclone.log).
-  --log-level <level>: Sets the verbosity level for logging (default: INFO).
-
-Tips:
-1. Use reasonable values for flags to avoid hitting API limits imposed by cloud providers.
-2. Review log files (rclone.log) to troubleshoot issues or monitor operations.
-3. Use "Manage Configurations" to update existing tasks or clean up unnecessary data.
-
-For more information, visit the rclone documentation or contact support!
-"""
-
-    # Check for available terminal emulator
-    terminal_command = None
-    if shutil.which("gnome-terminal"):
-        terminal_command = "gnome-terminal --"
-    elif shutil.which("xterm"):
-        terminal_command = "xterm -hold -e"
-    elif shutil.which("konsole"):
-        terminal_command = "konsole -e"
-    else:
-        print("No supported terminal emulator found. Displaying help in this terminal.")
-        print(help_content)
+def rerun_job(config):
+    """Rerun an existing backup or transfer job."""
+    if not config:
+        print("No jobs found to rerun.")
         return
 
-    # Create a temporary script to display help content
-    temp_script = "/tmp/backupbuddy_help.sh"
-    with open(temp_script, "w") as script:
-        script.write("#!/bin/bash\n")
-        script.write(f"echo \"{help_content}\"\n")
-        script.write("read -p 'Press Enter to close...'")  # Keeps the terminal open
-    os.chmod(temp_script, 0o755)
+    print("\nExisting jobs:")
+    for i, job_id in enumerate(config.keys(), start=1):
+        job = config[job_id]
+        job_type = "Transfer" if job.get("type") == "transfer" else "Backup"
+        print(f"{i}. [{job_type}] {job_id} - Source: {job.get('source_dir', job.get('source'))}, Destination: {job['destination']}")
 
-    # Open the help in a new terminal window
     try:
-        subprocess.run(f"{terminal_command} {temp_script}", shell=True, check=True)
-    except Exception as e:
-        print(f"Failed to open help in a new terminal: {e}")
-    finally:
-        os.remove(temp_script)  # Clean up the temporary script
+        choice = int(input("\nEnter the number of the job to rerun: ").strip()) - 1
+        if choice < 0 or choice >= len(config):
+            print("Invalid choice. Returning to main menu.")
+            return
 
+        job_id = list(config.keys())[choice]
+        print(f"Rerunning job: {job_id}")
+        script_path = os.path.join(SCRIPT_DIR, f"{'transfer' if config[job_id].get('type') == 'transfer' else 'backup'}_{job_id}.sh")
+        
+        if not os.path.exists(script_path):
+            print(f"Error: Script for job {job_id} does not exist. Please recreate the job.")
+            return
+
+        try:
+            print(f"Running the job {job_id}...")
+            subprocess.run([script_path], shell=True, check=True)
+            print("Job completed successfully.")
+        except subprocess.CalledProcessError as e:
+            print(f"Error occurred while running the job: {e}")
+    except ValueError:
+        print("Invalid input. Returning to main menu.")
+
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
+
+def clear_configurations():
+    """Clear configurations: Backup jobs, remotes, or all data."""
+    config = load_config()
+
+    print("\nWhat do you want to clear?")
+    print("1. Clear all remotes (rclone config)")
+    print("2. Clear a specific job")
+    print("3. Clear all jobs")
+    print("4. Clear temporary files")
+    print("5. Cancel")
+    choice = input("Enter your choice (1/2/3/4/5): ").strip()
+
+    if choice == "1":
+        print("\nClearing all remotes using rclone config...")
+        subprocess.run("rclone config", shell=True)
+        print("Remotes cleared. You can now configure new remotes.")
+    elif choice == "2":
+        if not config:
+            print("No jobs found to clear.")
+            return
+        print("\nConfigured jobs:")
+        for i, job_id in enumerate(config.keys(), start=1):
+            print(f"{i}. {job_id}")
+        try:
+            job_choice = int(input("\nEnter the number of the job to delete: ").strip()) - 1
+            if job_choice < 0 or job_choice >= len(config):
+                print("Invalid choice. Returning to main menu.")
+                return
+            job_id = list(config.keys())[job_choice]
+            print(f"\nDeleting job: {job_id}")
+            del config[job_id]
+            save_config(config)
+            print(f"Job '{job_id}' deleted successfully.")
+        except (ValueError, IndexError):
+            print("Invalid input. Returning to main menu.")
+    elif choice == "3":
+        confirm = input("Are you sure you want to clear all jobs? (yes/no): ").strip().lower()
+        if confirm == "yes":
+            if os.path.exists(CONFIG_FILE):
+                os.remove(CONFIG_FILE)
+                print("All jobs cleared.")
+            else:
+                print("Configuration file not found. No jobs to clear.")
+        else:
+            print("Operation canceled.")
+    elif choice == "4":
+        confirm = input("Are you sure you want to clear all temporary files? (yes/no): ").strip().lower()
+        if confirm == "yes":
+            subprocess.run(f"rm -rf {TEMP_DIR}/*", shell=True, check=True)
+            print("Temporary files cleared.")
+        else:
+            print("Operation canceled.")
+    elif choice == "5":
+        print("Returning to main menu.")
+    else:
+        print("Invalid choice. Returning to main menu.")
+        
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
 
 def remove_dependencies():
     """
@@ -1328,7 +1260,10 @@ def remove_dependencies():
     except Exception as e:
         print(f"Failed to remove package log file: {e}")
 
-
+#REMOVE#
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
 
 def remove_cron_jobs():
     """
@@ -1367,6 +1302,9 @@ def remove_cron_jobs():
     except subprocess.CalledProcessError as e:
         print(f"Failed to remove cron jobs: {e}")
 
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
 
 def remove_temp_files():
     """
@@ -1383,6 +1321,9 @@ def remove_temp_files():
     except Exception as e:
         print(f"Failed to remove temporary files: {e}")
 
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
 
 def remove_configurations():
     """
@@ -1420,6 +1361,9 @@ def remove_configurations():
         except Exception as e:
             print(f"Failed to remove rclone configuration directory: {e}")
 
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
 
 import sys  # Lägg till sys-modulen för att använda sys.exit()
 
@@ -1454,6 +1398,9 @@ def uninstall_backupbuddy():
     else:
         print("Invalid choice. Returning to main menu.")
 
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
 
 def validate_removal():
     """
@@ -1495,6 +1442,12 @@ def validate_removal():
         print("No cron jobs found, or crontab is empty.")
 
     print("\nValidation completed.")
+    
+
+#HELP#
+import subprocess
+import time  # Importera time-modulen för att använda sleep
+import subprocess
 
 
 def show_help():
@@ -1546,8 +1499,110 @@ def show_help():
     
     print("For more information, visit the rclone documentation or contact support!")
 
+#MAIN#
+
+
+def display_logo():
+    """
+    Display a green ASCII logo next to the welcome message, with red HTTP links and yellow numbers in the menu.
+    """
+    # ANSI Escape Codes for colors
+    GREEN = "\033[32m"
+    RED = "\033[31m"
+    YELLOW = "\033[33m"
+    RESET = "\033[0m"  # Reset to default color
+
+    ascii_logo = rf"""
+     {RED} _________________
+    | | ____My_____ |o|
+    | | ____Old____ | |
+    | | _Pictures__ | |
+    | | _____&_____ | |
+    | |____Taxes____| |
+    |     _______     |
+    |    |       |   ||
+    | DD |       |   V|
+    |____|_______|____|{RESET}
+    """
+    print(f"{GREEN}.............................................................{RESET}")
+    print(f"{YELLOW}psst, look here:{RESET}")
+    print(f"Have you considered trying out Parrot OS Sec/Home or HTB edition?")
+    print(f"Find them here: {RED}https://www.parrotsec.org{RESET}\n")
+    print(f"\n{GREEN}===============================================\n{RESET}")
+    print(f"{GREEN}Welcome to BackupBuddy!                      ||{RESET}")
+    print(f"{GREEN}Let's back up your files and keep them safe. ||{RESET}")
+    print(f"{GREEN}===============================================\n{RESET}")
+    print(ascii_logo)
+    print(f"For help regarding BackupBuddy, check: {RED}https://github.com/TubalQ/BackupBuddy{RESET}")
+    print(f"Good Luck & check option 8 for help // Best regards T-Q {RED}https://t-vault.se{RESET}")
+
+def main():
+    """
+    Main program to handle backup and restore operations.
+    """
+    # Define color variables at the top of the main function
+    GREEN = "\033[32m"
+    RED = "\033[31m"
+    YELLOW = "\033[33m"
+    RESET = "\033[0m"  # Reset to default color
+
+    check_and_install_dependencies()
+
+    # Display the ASCII logo and welcome message
+    display_logo()
+
+    while True:
+        config = load_config()
+        list_jobs(config)
+
+        print("\nWhat would you like to do:")
+        print(f"{YELLOW}1.{RESET} Create a new backup job")
+        print(f"{YELLOW}2.{RESET} Create a new transfer job")
+        print(f"{YELLOW}3.{RESET} Restore from an existing backup job")
+        print(f"{YELLOW}4.{RESET} Rerun an existing job")
+        print(f"{YELLOW}5.{RESET} Manage cron jobs")
+        print(f"{YELLOW}6.{RESET} Clear configurations and data")
+        print(f"{YELLOW}7.{RESET} Add a new remote or local path")
+        print(f"{YELLOW}8.{RESET} Uninstall BackupBuddy")
+        print(f"{YELLOW}9.{RESET} Help")
+        print(f"{YELLOW}10.{RESET} Exit")
+        
+        choice = input("Enter your choice (1-10): ").strip()
+
+        if choice == "1":
+            create_backup_job(config)
+        elif choice == "2":
+            create_transfer(config)
+        elif choice == "3":
+            restore_backup_job(config)
+        elif choice == "4":
+            rerun_job(config)
+        elif choice == "5":
+            edit_cron_jobs()
+        elif choice == "6":
+            clear_configurations()
+        elif choice == "7":
+            manage_remotes_and_paths()
+        elif choice == "8":
+            uninstall_backupbuddy()
+        elif choice == "9":
+            show_help()
+        elif choice == "10":
+            print("Goodbye! Thanks for using BackupBuddy.")
+            break
+        else:
+            print("Invalid choice. Try again.")
 
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+
+
+
 
