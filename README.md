@@ -124,15 +124,3 @@ Current remote directory: ProtonDrive:/backups
 b. Go back
 c. Enter a custom remote directory path
 d. Create a new directory
-
-
-
-#### Contributing
-Contributions are welcome
-#### Make your changes and commit:
-
-## License
-
-BackupBuddy is licensed under the MIT License. See LICENSE for more details.
-
-Feel free to copy and paste this updated README into your project. If you need assistance with pushing it to GitHub or have any other questions, don't hesitate to ask! 😊
