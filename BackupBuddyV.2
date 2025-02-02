@@ -742,13 +742,12 @@ import subprocess
 #GENERATE#
 
 def generate_transfer_script(config, job_id):
-    """Generate a transfer script."""
+    """Generate a transfer script for the specified job."""
     job = config[job_id]
     script_path = os.path.join(SCRIPT_DIR, f"transfer_{job_id}.sh")
     os.makedirs(SCRIPT_DIR, exist_ok=True)
 
     rclone_flags = " ".join(f"{flag} {value}" for flag, value in job.get("rclone_flags", {}).items())
-    use_progress = "--progress" in rclone_flags
     log_file = job.get("rclone_flags", {}).get("--log-file", None)
 
     with open(script_path, "w") as script:
@@ -759,40 +758,7 @@ def generate_transfer_script(config, job_id):
         source = job["source"]
         destination = job["destination"]
 
-        # Skapa TEMP_DIR om det inte finns
-        script.write(f"if [ ! -d \"{TEMP_DIR}\" ]; then\n")
-        script.write(f"    echo 'Creating temporary directory: {TEMP_DIR}'\n")
-        script.write(f"    mkdir -p {TEMP_DIR}\n")
-        script.write("else\n")
-        script.write("    echo 'Temporary directory already exists.'\n")
-        script.write("fi\n")
-
-        script.write(f"chmod 777 {TEMP_DIR}\n")  # Säkerställer skrivbarhet
-
-        if job["compress"]:
-            compression_level = job.get("compression_level", 6)
-            cores = job.get("cores", 4)
-
-            script.write(f"echo 'Compressing files with pigz -{compression_level}, using {cores} cores...'\n")
-
-            if use_progress:
-                script.write(f"tar -cf - -C {source} . | pv -cN 'Compressing' | pigz -{compression_level} -p {cores} > {TEMP_DIR}/transfer.tar.gz\n")
-            else:
-                script.write(f"tar -cf - -C {source} . | pigz -{compression_level} -p {cores} > {TEMP_DIR}/transfer.tar.gz\n")
-
-            if job["split_files"]:
-                split_size = job.get("split_size", "100M")
-                script.write("echo 'Splitting compressed file...'\n")
-                if use_progress:
-                    script.write(f"pv -cN 'Splitting' {TEMP_DIR}/transfer.tar.gz | split -b {split_size} - {TEMP_DIR}/transfer-part-\n")
-                else:
-                    script.write(f"split -b {split_size} {TEMP_DIR}/transfer.tar.gz {TEMP_DIR}/transfer-part-\n")
-                script.write(f"rm {TEMP_DIR}/transfer.tar.gz\n")
-
-            script.write(f"rclone copy {TEMP_DIR}/ {destination} {rclone_flags}\n")
-
-        else:
-            script.write(f"rclone copy {source} {destination} {rclone_flags}\n")
+        script.write(f"rclone copy {source} {destination} {rclone_flags}\n")
 
         script.write("echo 'Transfer completed.'\n")
 
@@ -803,6 +769,11 @@ def generate_transfer_script(config, job_id):
             script.write("else\n")
             script.write("    echo 'Errors detected in log. Keeping it for review.'\n")
             script.write("fi\n")
+
+        # --- NYA RADER FÖR ATT RENSA TEMP-KATALOGEN ---
+        script.write("echo 'Cleaning up temporary files...'\n")
+        script.write(f"rm -rf {TEMP_DIR}/*\n")
+        # ---------------------------------------------
 
     os.chmod(script_path, 0o755)
     return script_path
@@ -815,7 +786,6 @@ import subprocess
 def generate_backup_script(config, job_id):
     """
     Generate a backup script for the specified job.
-    
     """
     job = config[job_id]
     script_path = os.path.join(SCRIPT_DIR, f"backup_{job_id}.sh")
@@ -838,7 +808,7 @@ def generate_backup_script(config, job_id):
         script.write("    echo 'Temporary directory already exists.'\n")
         script.write("fi\n")
 
-        script.write(f"chmod 777 {TEMP_DIR}\n")  # Säkerställer skrivbarhet
+        script.write(f"chmod 777 {TEMP_DIR}\n")  # Säkerställer skrivbehörighet
 
         if job["compress"]:
             compression_level = job.get("compression_level", 6)
@@ -851,7 +821,7 @@ def generate_backup_script(config, job_id):
             else:
                 script.write(f"tar -cf - -C {job['source_dir']} . | pigz -{compression_level} -p {cores} > {TEMP_DIR}/backup.tar.gz\n")
 
-            if job["split_files"]:
+            if job['split_files']:
                 split_size = job.get("split_size", "100M")
                 script.write("echo 'Splitting compressed file...'\n")
                 if use_progress:
@@ -876,8 +846,14 @@ def generate_backup_script(config, job_id):
             script.write("    echo 'Errors detected in log. Keeping it for review.'\n")
             script.write("fi\n")
 
+        # --- NYA RADER FÖR ATT RENSA TEMP-KATALOGEN ---
+        script.write("echo 'Cleaning up temporary files...'\n")
+        script.write(f"rm -rf {TEMP_DIR}/*\n")
+        # ---------------------------------------------
+
     os.chmod(script_path, 0o755)
     return script_path
+
 
 
 import subprocess
