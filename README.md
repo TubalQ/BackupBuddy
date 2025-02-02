@@ -8,10 +8,6 @@ Interactive Directory Navigation
    
    Remote Directories (via rclone): Browse, select, or create directories on remote locations without manual commands.
 
-   Set cron jobs easily and chose between "copy" or "sync"
-
-   Set local shortcuts
-
    Remote to Remote
    Local to Remote
    Remote to Local
