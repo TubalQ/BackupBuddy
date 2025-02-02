@@ -4,6 +4,7 @@ import os
 import subprocess
 import json
 import shutil
+import time
 
 CONFIG_FILE = os.path.expanduser("~/.backup_tool_jobs.json")
 SCRIPT_DIR = os.path.expanduser("~/backup_scripts/")
@@ -23,10 +24,6 @@ def prepare_temp_directory():
 
 #CONFIG#
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
-
 def load_config():
     """Load configuration data from the JSON file and validate it."""
     if os.path.exists(CONFIG_FILE):
@@ -43,9 +40,6 @@ def load_config():
         return config
     return {}
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def save_config(config):
     """Save configuration data to the JSON file."""
@@ -54,9 +48,6 @@ def save_config(config):
 
 #LISTINGS AND REMOTES"
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def list_jobs(config):
     """List all backup and transfer jobs."""
@@ -74,9 +65,6 @@ def list_jobs(config):
                   f"Encrypted: {job_data.get('encrypt', False)}, Compressed: {job_data.get('compress', False)}, "
                   f"Split: {job_data.get('split_files', False)}")
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def list_remotes():
     """List configured rclone remotes."""
@@ -96,9 +84,6 @@ def list_remotes():
         print(f"Failed to retrieve remotes: {e}")
         return []
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def manage_remotes_and_paths():
     """Add new remotes or local paths."""
@@ -159,9 +144,6 @@ def manage_remotes_and_paths():
 
 #CHECK AND INSTALL DEPENDENCIES#
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def check_and_install_dependencies():
     """
@@ -227,9 +209,6 @@ def check_and_install_dependencies():
 
 #REMOTES#
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def select_remote():
     """Select a remote from the list or configure a new one."""
@@ -280,10 +259,6 @@ def select_remote():
 
 #NAVIGATE#
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
-
 def navigate_remote_directories(remote_name):
     """Navigate remote directories"""
     current_path = remote_name  # Start from the root of the selected remote
@@ -322,7 +297,7 @@ def navigate_remote_directories(remote_name):
             for idx, directory in enumerate(remote_directories, start=1):
                 print(f"{RED}{idx}. {directory}{RESET}")
 
-        # Alternativ
+        # Alternative
         print(f"\n{YELLOW}0.{RESET} Select this location")
         print(f"{YELLOW}b.{RESET} Go back")
         print(f"{YELLOW}c.{RESET} Enter a custom remote directory path")
@@ -389,13 +364,6 @@ def navigate_remote_directories(remote_name):
             except ValueError:
                 print("Invalid input. Please enter a number.")
 
-
-import subprocess
-import os
-
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def navigate_local_directories():
     """Let the user navigate local directories."""
@@ -517,15 +485,6 @@ def navigate_local_directories():
             return None
 
 #CREATE#
-
-import os
-
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
-
-import os
-import subprocess
 
 def create_backup_job(config):
     """
@@ -735,10 +694,6 @@ def create_transfer(config):
 
 
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
-
 #GENERATE#
 
 def generate_transfer_script(config, job_id):
@@ -770,18 +725,15 @@ def generate_transfer_script(config, job_id):
             script.write("    echo 'Errors detected in log. Keeping it for review.'\n")
             script.write("fi\n")
 
-        # --- NYA RADER FÖR ATT RENSA TEMP-KATALOGEN ---
+        # NYA RADER FÖR ATT RENSA TEMP-KATALOGEN
         script.write("echo 'Cleaning up temporary files...'\n")
         script.write(f"rm -rf {TEMP_DIR}/*\n")
-        # ---------------------------------------------
+        # ----
 
     os.chmod(script_path, 0o755)
     return script_path
 
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def generate_backup_script(config, job_id):
     """
@@ -846,19 +798,14 @@ def generate_backup_script(config, job_id):
             script.write("    echo 'Errors detected in log. Keeping it for review.'\n")
             script.write("fi\n")
 
-        # --- NYA RADER FÖR ATT RENSA TEMP-KATALOGEN ---
+        # NYA RADER FÖR ATT RENSA TEMP-KATALOGEN 
         script.write("echo 'Cleaning up temporary files...'\n")
         script.write(f"rm -rf {TEMP_DIR}/*\n")
-        # ---------------------------------------------
+        # 
 
     os.chmod(script_path, 0o755)
     return script_path
 
-
-
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def generate_restore_script(config, job_id):
     """Generate a restore script for the specified job."""
@@ -914,10 +861,6 @@ def generate_restore_script(config, job_id):
     return script_path
 
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
-
 def generate_transfer_script(config, job_id):
     """Generate a transfer script for the specified job."""
     job = config[job_id]
@@ -953,10 +896,6 @@ def generate_transfer_script(config, job_id):
 
 
 #RESTORE#
-
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def restore_backup_job(config):
     """Guide user through restoring a backup job."""
@@ -1004,10 +943,6 @@ def restore_backup_job(config):
 
 #CRON-JOBS#
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
-
 def configure_cron_job(config, job_id):
     """Prompt user to set up a cron job for the specified job."""
     setup_cron = input("Do you want to schedule this job with a cron job? (yes/no): ").strip().lower()
@@ -1042,9 +977,6 @@ def configure_cron_job(config, job_id):
     print("Cron job added successfully.")
 
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def edit_cron_jobs():
     """
@@ -1078,10 +1010,7 @@ def edit_cron_jobs():
 
     choice = input("Enter your choice (1/2/3): ").strip()
 
-
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
+#Validate#
 
 def validate_flag_value(flag, value):
     """
@@ -1097,14 +1026,11 @@ def validate_flag_value(flag, value):
         print(f"Invalid value for {flag}: {e}")
         return None
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def schedule_cron(job):
     """
     Add a cron job to root's crontab, reusing the rclone flags stored in the job configuration.
-    Now only asks for day of the week, removing "day of the month".
+    
     """
     print("\nSetting up a cron job for your task...")
 
@@ -1138,10 +1064,6 @@ def schedule_cron(job):
 
 #MISCS#
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
-
 def run_command(command):
     """
     Kör ett kommando med eller utan sudo beroende på om scriptet körs som root.
@@ -1154,9 +1076,6 @@ def run_command(command):
         print(f"Error executing command: {command}\n{e}")
         raise
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def rerun_job(config):
     """Rerun an existing backup or transfer job."""
@@ -1193,9 +1112,6 @@ def rerun_job(config):
     except ValueError:
         print("Invalid input. Returning to main menu.")
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def clear_configurations():
     """Clear configurations: Backup jobs, remotes, or all data."""
@@ -1253,10 +1169,7 @@ def clear_configurations():
         print("Returning to main menu.")
     else:
         print("Invalid choice. Returning to main menu.")
-        
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
+
 
 def remove_dependencies():
     """
@@ -1330,9 +1243,6 @@ def remove_dependencies():
         print(f"Failed to remove package log file: {e}")
 
 #REMOVE#
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def remove_cron_jobs():
     """
@@ -1371,9 +1281,6 @@ def remove_cron_jobs():
     except subprocess.CalledProcessError as e:
         print(f"Failed to remove cron jobs: {e}")
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def remove_temp_files():
     """
@@ -1390,9 +1297,6 @@ def remove_temp_files():
     except Exception as e:
         print(f"Failed to remove temporary files: {e}")
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def remove_configurations():
     """
@@ -1430,9 +1334,7 @@ def remove_configurations():
         except Exception as e:
             print(f"Failed to remove rclone configuration directory: {e}")
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
+
 
 import sys  # Lägg till sys-modulen för att använda sys.exit()
 
@@ -1467,9 +1369,6 @@ def uninstall_backupbuddy():
     else:
         print("Invalid choice. Returning to main menu.")
 
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
 
 def validate_removal():
     """
@@ -1514,14 +1413,10 @@ def validate_removal():
     
 
 #HELP#
-import subprocess
-import time  # Importera time-modulen för att använda sleep
-import subprocess
-
 
 def show_help():
     """
-    Display an overview of BackupBuddy and its features.
+    Display an overview of BackupBuddy.
     """
     print("\n========================================")
     print("Welcome to the BackupBuddy Help Section!")
@@ -1573,7 +1468,7 @@ def show_help():
 
 def display_logo():
     """
-    Display a green ASCII logo next to the welcome message, with red HTTP links and yellow numbers in the menu.
+    Display a green ASCII logo next to the welcome message in the menu.
     """
     # ANSI Escape Codes for colors
     GREEN = "\033[32m"
@@ -1609,7 +1504,7 @@ def main():
     """
     Main program to handle backup and restore operations.
     """
-    # Define color variables at the top of the main function
+    # Define color variables
     GREEN = "\033[32m"
     RED = "\033[31m"
     YELLOW = "\033[33m"
