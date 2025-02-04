@@ -147,15 +147,15 @@ def manage_remotes_and_paths():
 
 def check_and_install_dependencies():
     """
-    Kontrollera och installera nödvändiga beroenden.
-    Installera rclone alltid via curl och använd apt som fallback om det inte går.
-    Om curl saknas, installera curl först.
+    Check and install dependencies.
+    Always try to install rclone through curl, use apt as backup.
+    If curl is missing, install first.
     """
     DEPENDENCY_FLAG_FILE = os.path.expanduser("~/.backupbuddy_dependencies_checked")
     INSTALLED_PACKAGES_LOG = os.path.expanduser("~/.backupbuddy_installed_packages.log")
     dependencies = ["curl", "pigz", "tar", "pv", "cron"]
 
-    # Kontrollera om alla beroenden finns installerade
+    # Check if dependencies already installed.
     missing_dependencies = [dep for dep in dependencies if not shutil.which(dep)]
 
     if not missing_dependencies and os.path.exists(DEPENDENCY_FLAG_FILE):
@@ -177,18 +177,18 @@ def check_and_install_dependencies():
         except subprocess.CalledProcessError as e:
             print(f"Failed to install {packages} using {package_manager}: {e}")
 
-    # Installera curl om det saknas
+    # Install curl if missing
     if "curl" in missing_dependencies:
         print("curl not found. Installing curl...")
         install_dependency("apt", ["curl"])
         missing_dependencies.remove("curl")
 
-    # Installera andra beroenden om de saknas
+    # Installer other missing dependencies
     if missing_dependencies:
         print("Installing missing dependencies...")
         install_dependency("apt", missing_dependencies)
 
-    # Installera rclone via curl, med fallback till apt
+    # Installer rclone through curl, fallback to apt
     print("\nAttempting to install rclone via curl...")
     try:
         subprocess.run("curl https://rclone.org/install.sh | sudo bash", shell=True, check=True)
@@ -197,7 +197,7 @@ def check_and_install_dependencies():
         print("Failed to install rclone via curl. Falling back to apt.")
         install_dependency("apt", ["rclone"])
 
-    # Uppdatera flaggfilen om alla beroenden nu är installerade
+    # Update flaggfile that all dependencies are installed
     if all(shutil.which(dep) for dep in dependencies + ["rclone"]):
         with open(DEPENDENCY_FLAG_FILE, "w") as flag_file:
             flag_file.write("Dependencies checked and installed.")
@@ -231,7 +231,7 @@ def select_remote():
                 print("Operation canceled.")
                 return None
 
-        # Lista befintliga remotes
+        # List available remotes
         print("\nAvailable remotes:")
         for i, remote in enumerate(remotes, start=1):
             print(f"{i}. {remote}")
@@ -269,7 +269,7 @@ def navigate_remote_directories(remote_name):
     while True:
         print(f"\n{YELLOW}Current remote directory: {current_path}{RESET}")
 
-        # Försök lista kataloger i den aktuella sökvägen
+        # Try to list catalogue
         try:
             result = subprocess.run(
                 ["rclone", "lsd", current_path],
@@ -288,11 +288,11 @@ def navigate_remote_directories(remote_name):
         # Visa vilken katalog vi är i
         print(f"\n{YELLOW}You are currently in:{RESET} {current_path}")
 
-        # Hantera tomma kataloger eller fel
+        # Manage empty directories
         if not remote_directories:
             print(f"{RED}No directories found in this location.{RESET}")
         else:
-            # Lista kataloger
+            # List directory
             print(f"\n{RED}Remote Directories:{RESET}")
             for idx, directory in enumerate(remote_directories, start=1):
                 print(f"{RED}{idx}. {directory}{RESET}")
@@ -307,7 +307,7 @@ def navigate_remote_directories(remote_name):
         choice = input("\nEnter your choice: ").strip()
 
         if choice == "0":
-            # Bekräfta valet av den aktuella katalogen
+            # Confirm choice of directory
             print(f"{YELLOW}You have selected the current location: {current_path}{RESET}")
             return current_path
         elif choice.lower() == "b":
@@ -317,14 +317,14 @@ def navigate_remote_directories(remote_name):
             else:
                 print("You are already at the root remote directory.")
         elif choice.lower() == "c":
-            # Ange en anpassad sökväg
+            # enter custom path
             custom_path = input("Enter the custom remote directory path: ").strip()
             if custom_path.startswith(remote_name):
                 current_path = custom_path
             else:
                 current_path = f"{remote_name}/{custom_path}".rstrip("/")
         elif choice.lower() == "d":
-            # Skapa en ny katalog direkt på remote
+            # Create new directory diractly at remote
             new_dir = input("Enter the name for the new directory: ").strip()
             if new_dir:
                 try:
@@ -494,11 +494,11 @@ def create_backup_job(config):
     print("\nCreating a new backup job.")
     job_id = input("Enter a unique ID for the backup job: ").strip()
 
-    # Välj source directory
+    # Choose source directory
     print("\nNavigate to select the source directory (local).")
     source_dir = navigate_local_directories()
 
-    # Välj remote destination
+    # Choose remote destination
     print("\nNavigate to select the destination directory (remote).")
     remote_name = select_remote()
     if remote_name is None:
@@ -506,7 +506,7 @@ def create_backup_job(config):
         return
     destination_path = navigate_remote_directories(remote_name)
 
-    # Fråga om kompression
+    # Ask if compression
     compress = input("Do you want to compress files? (yes/no): ").strip().lower() == "yes"
     compression_level = None
     cores = None
@@ -517,12 +517,12 @@ def create_backup_job(config):
         compression_level = int(input("Enter compression level (1=low, 9=high, default: 6): ").strip() or 6)
         cores = int(input("Enter the number of CPU cores to use (default: 4): ").strip() or 4)
 
-        # Fråga om split-filer (BARA om komprimering är aktivt)
+        # Ask if split files (Only if compression is set to yes/true)
         split_files = input("Do you want to split the compressed archive? (yes/no): ").strip().lower() == "yes"
         if split_files:
             split_size = input("Enter maximum size per part (e.g., 10M, 1G, default: 100M): ").strip() or "100M"
 
-    # Konfigurera rclone flaggor
+    # Configure rclone flags
     print("\nConfigure rclone flags for this job (Press Enter to use default values):")
     default_flags = {
         "--tpslimit": "2",
@@ -540,12 +540,12 @@ def create_backup_job(config):
         if new_value:
             default_flags[flag] = new_value
 
-    # Fråga om --progress ska inkluderas
+    # Ask if --progress should be included
     add_progress = input("Do you want to enable progress output (--progress)? (yes/no, default: no): ").strip().lower()
     if add_progress == "yes":
         default_flags["--progress"] = ""
 
-    # Spara konfigurationen
+    # Save configuration
     config[job_id] = {
         "source_dir": source_dir,
         "destination": destination_path,
@@ -558,7 +558,7 @@ def create_backup_job(config):
     }
     save_config(config)
 
-    # Generera och kör backup-skript
+    # Generate and run backup-skript
     script_path = generate_backup_script(config, job_id)
     print(f"Backup script generated: {script_path}")
 
@@ -570,7 +570,7 @@ def create_backup_job(config):
         print(f"Error occurred while running the backup job: {e}")
         return
 
-    # Fråga om cron-jobb
+    # Ask if cron-jobb
     setup_cron = input("Do you want to schedule this job with a cron job? (yes/no, default: no): ").strip().lower()
     if setup_cron == "yes":
         schedule_cron(config[job_id])
@@ -583,7 +583,7 @@ def create_transfer(config):
     print("\nCreating a new transfer job.")
     job_id = input("Enter a unique ID for the transfer job: ").strip()
 
-    # Välj source (lokal eller remote)
+    # Choose source (local or remote)
     print("\nSelect the source:")
     print("1. Local directory")
     print("2. Remote")
@@ -603,7 +603,7 @@ def create_transfer(config):
         print("Invalid choice. Returning to main menu.")
         return
 
-    # Välj destination (lokal eller remote)
+    # Choose destination (local or remote)
     print("\nSelect the destination:")
     print("1. Local directory")
     print("2. Remote")
@@ -623,7 +623,7 @@ def create_transfer(config):
         print("Invalid choice. Returning to main menu.")
         return
 
-    # Fråga om komprimering
+    # Ask if compression
     compress = input("Do you want to compress files before transfer? (yes/no): ").strip().lower() == "yes"
     compression_level = None
     cores = None
@@ -639,7 +639,7 @@ def create_transfer(config):
         if split_files:
             split_size = input("Enter maximum size per part (e.g., 10M, 1G, default: 100M): ").strip() or "100M"
 
-    # Konfigurera rclone flaggor
+    # Configure rclone flags
     print("\nConfigure rclone flags for this job (Press Enter to use default values):")
     default_flags = {
         "--transfers": "4",
@@ -654,12 +654,12 @@ def create_transfer(config):
         if new_value:
             default_flags[flag] = new_value
 
-    # Fråga om --progress ska inkluderas
+    # Ask if --progress should be set
     add_progress = input("Do you want to enable progress output (--progress)? (yes/no, default: no): ").strip().lower()
     if add_progress == "yes":
         default_flags["--progress"] = ""
 
-    # Spara konfigurationen
+    # Save Configuration
     config[job_id] = {
         "source": source,
         "destination": destination,
@@ -673,7 +673,7 @@ def create_transfer(config):
     }
     save_config(config)
 
-    # Generera och kör överföringsskript
+    # Generate and run transfer script
     script_path = generate_transfer_script(config, job_id)
     print(f"Transfer script generated: {script_path}")
 
@@ -685,7 +685,7 @@ def create_transfer(config):
         print(f"Error occurred while running the transfer job: {e}")
         return
 
-    # Fråga om cron-jobb
+    # Ask if cron-job
     setup_cron = input("Do you want to schedule this job with a cron job? (yes/no, default: no): ").strip().lower()
     if setup_cron == "yes":
         schedule_cron(config[job_id])
@@ -725,7 +725,7 @@ def generate_transfer_script(config, job_id):
             script.write("    echo 'Errors detected in log. Keeping it for review.'\n")
             script.write("fi\n")
 
-        # NYA RADER FÖR ATT RENSA TEMP-KATALOGEN
+        # Clean temp
         script.write("echo 'Cleaning up temporary files...'\n")
         script.write(f"rm -rf {TEMP_DIR}/*\n")
         # ----
@@ -752,7 +752,7 @@ def generate_backup_script(config, job_id):
         script.write("set -e\n")
         script.write("echo 'Starting backup process...'\n")
 
-        # Skapa TEMP_DIR om det inte finns
+        # Create TEMP_DIR if not created
         script.write(f"if [ ! -d \"{TEMP_DIR}\" ]; then\n")
         script.write(f"    echo 'Creating temporary directory: {TEMP_DIR}'\n")
         script.write(f"    mkdir -p {TEMP_DIR}\n")
@@ -814,10 +814,10 @@ def generate_restore_script(config, job_id):
     script_path = os.path.join(SCRIPT_DIR, f"restore_{job_id}.sh")
     os.makedirs(SCRIPT_DIR, exist_ok=True)
 
-    # Bygg rclone-flaggor baserat på användarval
+    # Build rclone-flaggor based on user input
     rclone_flags = " ".join(f"{flag} {value}" for flag, value in job.get("rclone_flags", {}).items())
 
-    # Kontrollera om --progress är aktiverat
+    # Check if --progress is activated
     use_progress = "--progress" in rclone_flags
 
     with open(script_path, "w") as script:
@@ -825,7 +825,7 @@ def generate_restore_script(config, job_id):
         script.write("set -e\n")
         script.write("echo 'Starting restore process...'\n")
 
-        # Hämta från remote
+        # Collect from remote
         script.write("echo 'Downloading files from remote...'\n")
         script.write(f"rclone copy {job['destination']} {TEMP_DIR} {rclone_flags}\n")
 
@@ -840,7 +840,7 @@ def generate_restore_script(config, job_id):
             script.write("    exit 1\n")
             script.write("fi\n")
 
-        # Extrahera om komprimering används
+        # Extract if compression is used
         if job.get("compress"):
             script.write("echo 'Extracting compressed files...'\n")
             script.write(f"mkdir -p {target_dir}\n")
