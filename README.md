@@ -54,4 +54,4 @@ MIT License
 
 ## Author
 
-T-Q - https://t-vault.se
+T-Q - https://itdetective.eu
