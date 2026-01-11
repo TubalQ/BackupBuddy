@@ -48,13 +48,6 @@ backupbuddy
 python3 /root/BackupBuddy/backupbuddy.py
 ```
 
-## Design Philosophy
-
-BackupBuddy features a "Neo Matrix" design theme:
-- **Primary**: Neon green (#00FF41) on deep black (#0D0208)
-- **Accents**: Cyber blue, warning amber, alert red
-- **Style**: Heavy use of Unicode box characters and ASCII art
-- **Animations**: Subtle Matrix rain effects and progress indicators
 
 ## Project Structure
 
