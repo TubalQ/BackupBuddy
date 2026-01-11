@@ -12,6 +12,7 @@ from .validation import (
     confirm_action,
     validate_flag_value
 )
+from .matrix_ui import MatrixUI, MatrixColors
 
 __all__ = [
     'Colors',
@@ -25,4 +26,6 @@ __all__ = [
     'get_yes_no',
     'confirm_action',
     'validate_flag_value',
+    'MatrixUI',
+    'MatrixColors',
 ]

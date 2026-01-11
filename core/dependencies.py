@@ -61,17 +61,29 @@ def _install_packages(packages: list) -> None:
 
 
 def _install_rclone() -> None:
-    """Install rclone via curl or apt."""
+    """Install rclone via curl (official method)."""
     if shutil.which("rclone"):
         print("rclone is already installed.")
         return
     
-    print("\nAttempting to install rclone via curl...")
+    print("\nInstalling rclone via official install script...")
+    print(f"{Colors.YELLOW}Running: sudo -v ; curl https://rclone.org/install.sh | sudo bash{Colors.RESET}")
+    
     try:
-        run_command("curl https://rclone.org/install.sh | bash")
-        print(f"{Colors.GREEN}rclone installed successfully via curl.{Colors.RESET}")
-    except Exception:
-        print(f"{Colors.YELLOW}Failed to install rclone via curl. Falling back to apt.{Colors.RESET}")
+        # Refresh sudo credentials
+        run_command("sudo -v", check=False)
+        
+        # Install rclone using official script
+        run_command("curl https://rclone.org/install.sh | sudo bash")
+        print(f"{Colors.GREEN}rclone installed successfully via official script.{Colors.RESET}")
+        
+        # Log rclone installation
+        with open(INSTALLED_PACKAGES_LOG, "a") as log_file:
+            log_file.write("rclone\n")
+            
+    except Exception as e:
+        print(f"{Colors.RED}Failed to install rclone via curl: {e}{Colors.RESET}")
+        print(f"{Colors.YELLOW}Falling back to apt package manager...{Colors.RESET}")
         _install_packages(["rclone"])
 
 
