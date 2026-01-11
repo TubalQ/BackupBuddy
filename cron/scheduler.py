@@ -11,13 +11,18 @@ from utils.validation import get_int_input, confirm_action
 
 def schedule_cron(job: dict, job_id: str) -> None:
     """
-    Add a cron job to schedule a task.
+    Add a cron job to schedule a task with Matrix UI.
     
     Args:
         job: Job configuration
         job_id: Job ID
     """
-    print("\nSetting up a cron job for your task...")
+    from utils.matrix_ui import MatrixUI, MatrixColors
+    
+    MatrixUI.clear_screen()
+    MatrixUI.print_header("SCHEDULE CRON JOB", f"Job: {job_id}")
+    
+    print(f"{MatrixColors.CYBER_BLUE}Configure automatic scheduling for this job{MatrixColors.RESET}\n")
 
     # Build rclone command with flags from job configuration
     rclone_flags = " ".join(f"{flag} {value}" for flag, value in job.get("rclone_flags", {}).items())
@@ -26,88 +31,108 @@ def schedule_cron(job: dict, job_id: str) -> None:
     cron_command = f"rclone copy {source} {destination} {rclone_flags}"
 
     # Collect cron schedule
-    print("\nSet up your cron schedule:")
-    minute = get_int_input("Minute (0-59, default: 0)", default=0, min_val=0, max_val=59)
-    hour = get_int_input("Hour (0-23, default: 0)", default=0, min_val=0, max_val=23)
+    print(f"{MatrixColors.MATRIX_GREEN}╔{'═' * 66}╗{MatrixColors.RESET}")
+    print(f"{MatrixColors.MATRIX_GREEN}║{MatrixColors.BOLD}{'CRON SCHEDULE CONFIGURATION'.center(66)}{MatrixColors.RESET}{MatrixColors.MATRIX_GREEN}║{MatrixColors.RESET}")
+    print(f"{MatrixColors.MATRIX_GREEN}╚{'═' * 66}╝{MatrixColors.RESET}\n")
     
-    month = input("Month (1-12, default: * for every month): ").strip() or "*"
-    day_of_week = input("Day of the week (0=Sunday, 6=Saturday, * for every day, default: *): ").strip() or "*"
+    minute = get_int_input(f"{MatrixColors.MATRIX_GREEN}Minute (0-59, default: 0){MatrixColors.RESET}", default=0, min_val=0, max_val=59)
+    hour = get_int_input(f"{MatrixColors.MATRIX_GREEN}Hour (0-23, default: 0){MatrixColors.RESET}", default=0, min_val=0, max_val=23)
+    
+    month = input(f"{MatrixColors.MATRIX_GREEN}Month (1-12, default: * for every month): {MatrixColors.RESET}").strip() or "*"
+    day_of_week = input(f"{MatrixColors.MATRIX_GREEN}Day of the week (0=Sunday, 6=Saturday, * for every day, default: *): {MatrixColors.RESET}").strip() or "*"
 
     # Build cron schedule
     schedule = f"{minute} {hour} * {month} {day_of_week}"
     full_cron = f"{schedule} {cron_command} # backupbuddy"
 
+    # Display preview
+    print(f"\n{MatrixColors.MATRIX_GREEN}╔{'═' * 66}╗{MatrixColors.RESET}")
+    print(f"{MatrixColors.MATRIX_GREEN}║{MatrixColors.BOLD}{'CRON JOB PREVIEW'.center(66)}{MatrixColors.RESET}{MatrixColors.MATRIX_GREEN}║{MatrixColors.RESET}")
+    print(f"{MatrixColors.MATRIX_GREEN}╚{'═' * 66}╝{MatrixColors.RESET}\n")
+    print(f"{MatrixColors.DIM}{full_cron}{MatrixColors.RESET}\n")
+
     # Add cron job
-    print(f"\nAdding the following cron job:\n{full_cron}")
     try:
         add_command = f'(crontab -l 2>/dev/null; echo "{full_cron}") | crontab -'
         run_command(add_command)
-        print(f"{Colors.GREEN}Cron job added successfully.{Colors.RESET}")
+        MatrixUI.print_success("CRON JOB ADDED", f"Job '{job_id}' scheduled successfully")
     except Exception as e:
-        print(f"{Colors.RED}Failed to add cron job: {e}{Colors.RESET}")
+        MatrixUI.print_error("CRON FAILED", f"Failed to add cron job: {e}")
+    
+    input("\nPress Enter to continue...")
 
 
 def edit_cron_jobs() -> None:
-    """List, edit or remove existing cron jobs."""
-    print("\nManaging cron jobs...\n")
+    """List, edit or remove existing cron jobs with Matrix UI."""
+    from utils.matrix_ui import MatrixUI, MatrixColors
+    
+    MatrixUI.clear_screen()
+    MatrixUI.print_header("MANAGE CRON JOBS", "View and modify scheduled tasks")
 
     try:
         result = run_command("crontab -l", capture_output=True, check=False)
         if result.returncode != 0 or not result.stdout.strip():
-            print("No cron jobs found.")
+            MatrixUI.print_warning("NO CRON JOBS", "No cron jobs found")
             return
         
         cron_jobs = result.stdout.strip().split("\n")
     except Exception:
-        print("No cron jobs found.")
+        MatrixUI.print_warning("NO CRON JOBS", "No cron jobs found")
         return
 
     if not cron_jobs:
-        print("No cron jobs found.")
+        MatrixUI.print_warning("NO CRON JOBS", "No cron jobs found")
         return
 
-    print("Existing cron jobs:")
+    print(f"{MatrixColors.MATRIX_GREEN}╔{'═' * 66}╗{MatrixColors.RESET}")
+    print(f"{MatrixColors.MATRIX_GREEN}║{MatrixColors.BOLD}{'EXISTING CRON JOBS'.center(66)}{MatrixColors.RESET}{MatrixColors.MATRIX_GREEN}║{MatrixColors.RESET}")
+    print(f"{MatrixColors.MATRIX_GREEN}╚{'═' * 66}╝{MatrixColors.RESET}\n")
+    
     for i, job in enumerate(cron_jobs, start=1):
-        print(f"{Colors.YELLOW}{i}.{Colors.RESET} {Colors.GREEN}{job}{Colors.RESET}")
+        print(f"{MatrixColors.MATRIX_GREEN}{i}.{MatrixColors.RESET} {MatrixColors.CYBER_BLUE}{job}{MatrixColors.RESET}")
 
-    print("\nWhat would you like to do:")
-    print(f"{Colors.YELLOW}1.{Colors.RESET} {Colors.GREEN}Delete a cron job{Colors.RESET}")
-    print(f"{Colors.YELLOW}2.{Colors.RESET} {Colors.GREEN}Cancel{Colors.RESET}")
+    print(f"\n{MatrixColors.MATRIX_GREEN}╔{'═' * 50}╗{MatrixColors.RESET}")
+    print(f"{MatrixColors.MATRIX_GREEN}║{MatrixColors.BOLD}{'ACTIONS'.center(50)}{MatrixColors.RESET}{MatrixColors.MATRIX_GREEN}║{MatrixColors.RESET}")
+    print(f"{MatrixColors.MATRIX_GREEN}╚{'═' * 50}╝{MatrixColors.RESET}\n")
+    print(f"{MatrixColors.MATRIX_GREEN}1.{MatrixColors.RESET} Delete a cron job")
+    print(f"{MatrixColors.MATRIX_GREEN}2.{MatrixColors.RESET} Cancel\n")
 
-    choice = input("Enter your choice (1/2): ").strip()
+    choice = input(f"{MatrixColors.CYBER_BLUE}Enter your choice (1/2): {MatrixColors.RESET}").strip()
 
     if choice == "1":
         _delete_cron_job(cron_jobs)
     elif choice == "2":
-        print("Returning to main menu.")
+        return
     else:
-        print("Invalid choice. Returning to main menu.")
+        MatrixUI.print_error("INVALID CHOICE", "Please enter 1 or 2")
 
 
 def _delete_cron_job(cron_jobs: list) -> None:
-    """Delete a specific cron job."""
+    """Delete a specific cron job with Matrix UI."""
+    from utils.matrix_ui import MatrixUI, MatrixColors
+    
     try:
-        job_index = int(input("\nEnter the number of the cron job to delete: ").strip()) - 1
+        job_index = int(input(f"\n{MatrixColors.CYBER_BLUE}Enter the number of the cron job to delete: {MatrixColors.RESET}").strip()) - 1
         
         if job_index < 0 or job_index >= len(cron_jobs):
-            print(f"{Colors.RED}Invalid choice.{Colors.RESET}")
+            MatrixUI.print_error("INVALID CHOICE", "Job number out of range")
             return
         
-        if confirm_action(f"Are you sure you want to delete this cron job?\n{cron_jobs[job_index]}"):
+        if confirm_action(f"Delete this cron job?\n{cron_jobs[job_index]}"):
             # Remove job from list
             cron_jobs.pop(job_index)
             
             # Update crontab
             new_crontab = "\n".join(cron_jobs) + "\n" if cron_jobs else ""
             run_command(f'echo "{new_crontab}" | crontab -')
-            print(f"{Colors.GREEN}Cron job deleted successfully.{Colors.RESET}")
+            MatrixUI.print_success("CRON JOB DELETED", "Cron job removed successfully")
         else:
-            print("Deletion canceled.")
+            MatrixUI.print_warning("CANCELLED", "Deletion cancelled")
     
     except ValueError:
-        print(f"{Colors.RED}Invalid input.{Colors.RESET}")
+        MatrixUI.print_error("INVALID INPUT", "Please enter a valid number")
     except Exception as e:
-        print(f"{Colors.RED}Failed to delete cron job: {e}{Colors.RESET}")
+        MatrixUI.print_error("DELETE FAILED", f"Failed to delete cron job: {e}")
 
 
 def remove_cron_jobs() -> None:

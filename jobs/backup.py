@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Backup job creation and management for BackupBuddy.
+Matrix UI implementation.
 """
 
 from config.manager import save_config
@@ -10,45 +11,71 @@ from core.remotes import select_remote
 from scripts.generator import generate_backup_script
 from cron.scheduler import schedule_cron
 from utils.commands import run_script
-from utils.display import Colors
+from utils.matrix_ui import MatrixUI, MatrixColors
 from utils.validation import get_yes_no, get_int_input
 
 
 def create_backup_job(config: dict) -> None:
     """
-    Guide user through creating a new backup job.
+    Guide user through creating a new backup job with Matrix UI.
     """
-    print("\nCreating a new backup job.")
-    job_id = input("Enter a unique ID for the backup job: ").strip()
+    MatrixUI.clear_screen()
+    MatrixUI.print_header("CREATE BACKUP JOB", "Configure a new backup workflow")
+    
+    # Step 1: Job ID
+    print(f"{MatrixColors.CYBER_BLUE}Step 1/5: Job Configuration{MatrixColors.RESET}\n")
+    job_id = input(f"{MatrixColors.MATRIX_GREEN}Enter a unique ID for the backup job: {MatrixColors.RESET}").strip()
     
     if not job_id:
-        print(f"{Colors.RED}Job ID cannot be empty.{Colors.RESET}")
+        MatrixUI.print_error("INVALID INPUT", "Job ID cannot be empty")
+        input("\nPress Enter to continue...")
         return
     
     if job_id in config:
-        print(f"{Colors.RED}Job ID already exists. Please choose a different ID.{Colors.RESET}")
+        MatrixUI.print_error("DUPLICATE ID", f"Job ID '{job_id}' already exists", 
+                           actions=["Choose a different ID", "Delete the existing job first"])
+        input("\nPress Enter to continue...")
         return
 
-    # Select source directory
-    print("\nNavigate to select the source directory (local).")
+    # Step 2: Select source directory
+    MatrixUI.clear_screen()
+    MatrixUI.print_header("CREATE BACKUP JOB", f"Job: {job_id}")
+    print(f"{MatrixColors.CYBER_BLUE}Step 2/5: Source Selection{MatrixColors.RESET}\n")
+    print(f"{MatrixColors.MATRIX_GREEN}Navigate to select the source directory (local).{MatrixColors.RESET}\n")
+    
     source_dir = navigate_local_directories()
     if not source_dir:
-        print("Operation canceled.")
+        MatrixUI.print_warning("CANCELLED", "Backup job creation cancelled")
+        input("\nPress Enter to continue...")
         return
 
-    # Select destination (remote)
-    print("\nNavigate to select the destination directory (remote).")
+    # Step 3: Select destination (remote)
+    MatrixUI.clear_screen()
+    MatrixUI.print_header("CREATE BACKUP JOB", f"Job: {job_id}")
+    print(f"{MatrixColors.CYBER_BLUE}Step 3/5: Destination Selection{MatrixColors.RESET}\n")
+    print(f"{MatrixColors.MATRIX_GREEN}Navigate to select the destination directory (remote).{MatrixColors.RESET}\n")
+    
     remote_name = select_remote()
     if not remote_name:
-        print("Operation canceled.")
+        MatrixUI.print_warning("CANCELLED", "Backup job creation cancelled")
+        input("\nPress Enter to continue...")
         return
     
     destination_path = navigate_remote_directories(remote_name)
     if not destination_path:
-        print("Operation canceled.")
+        MatrixUI.print_warning("CANCELLED", "Backup job creation cancelled")
+        input("\nPress Enter to continue...")
         return
 
-    # Configure compression
+    # Step 4: Configure compression
+    MatrixUI.clear_screen()
+    MatrixUI.print_header("CREATE BACKUP JOB", f"Job: {job_id}")
+    print(f"{MatrixColors.CYBER_BLUE}Step 4/5: Compression Settings{MatrixColors.RESET}\n")
+    
+    print(f"{MatrixColors.MATRIX_GREEN}╔{'═' * 66}╗{MatrixColors.RESET}")
+    print(f"{MatrixColors.MATRIX_GREEN}║{MatrixColors.BOLD}{'COMPRESSION OPTIONS'.center(66)}{MatrixColors.RESET}{MatrixColors.MATRIX_GREEN}║{MatrixColors.RESET}")
+    print(f"{MatrixColors.MATRIX_GREEN}╚{'═' * 66}╝{MatrixColors.RESET}\n")
+    
     compress = get_yes_no("Do you want to compress files?")
     compression_level = None
     cores = None
@@ -56,26 +83,31 @@ def create_backup_job(config: dict) -> None:
     split_size = None
 
     if compress:
+        print()
         compression_level = get_int_input(
-            f"Enter compression level (1=low, 9=high, default: {DEFAULT_COMPRESSION_LEVEL})",
+            f"{MatrixColors.MATRIX_GREEN}Compression level (1=low, 9=high, default: {DEFAULT_COMPRESSION_LEVEL}){MatrixColors.RESET}",
             default=DEFAULT_COMPRESSION_LEVEL,
             min_val=1,
             max_val=9
         )
         cores = get_int_input(
-            f"Enter the number of CPU cores to use (default: {DEFAULT_CORES})",
+            f"{MatrixColors.MATRIX_GREEN}Number of CPU cores (default: {DEFAULT_CORES}){MatrixColors.RESET}",
             default=DEFAULT_CORES,
             min_val=1
         )
 
-        # Ask about split files (only if compression is enabled)
+        print()
         split_files = get_yes_no("Do you want to split the compressed archive?")
         if split_files:
             split_size = input(
-                f"Enter maximum size per part (e.g., 10M, 1G, default: {DEFAULT_SPLIT_SIZE}): "
+                f"{MatrixColors.MATRIX_GREEN}Maximum size per part (e.g., 10M, 1G, default: {DEFAULT_SPLIT_SIZE}): {MatrixColors.RESET}"
             ).strip() or DEFAULT_SPLIT_SIZE
 
-    # Configure rclone flags
+    # Step 5: Configure rclone flags
+    MatrixUI.clear_screen()
+    MatrixUI.print_header("CREATE BACKUP JOB", f"Job: {job_id}")
+    print(f"{MatrixColors.CYBER_BLUE}Step 5/5: rclone Configuration{MatrixColors.RESET}\n")
+    
     rclone_flags = _configure_rclone_flags(job_id, DEFAULT_BACKUP_FLAGS)
 
     # Save configuration
@@ -91,54 +123,75 @@ def create_backup_job(config: dict) -> None:
     }
     
     if not save_config(config):
-        print(f"{Colors.RED}Failed to save configuration.{Colors.RESET}")
+        MatrixUI.print_error("SAVE FAILED", "Failed to save configuration")
+        input("\nPress Enter to continue...")
         return
 
     # Generate and run backup script
+    MatrixUI.clear_screen()
+    print(f"\n{MatrixColors.MATRIX_GREEN}⣾{MatrixColors.RESET} Generating backup script...\n")
+    
     script_path = generate_backup_script(config, job_id)
-    print(f"{Colors.GREEN}Backup script generated: {script_path}{Colors.RESET}")
+    
+    MatrixUI.print_success(
+        "SCRIPT GENERATED",
+        f"Backup script created: {script_path}"
+    )
 
     if get_yes_no("Do you want to run the backup job now?", default=True):
-        print(f"Running the backup job {job_id}...")
+        MatrixUI.clear_screen()
+        print(f"\n{MatrixColors.MATRIX_GREEN}⣾{MatrixColors.RESET} Running backup job '{job_id}'...\n")
+        
         if run_script(str(script_path)):
-            print(f"{Colors.GREEN}Backup job completed successfully.{Colors.RESET}")
+            MatrixUI.print_success(
+                "BACKUP COMPLETED",
+                f"Job '{job_id}' executed successfully",
+                stats={
+                    "Job ID": job_id,
+                    "Source": source_dir,
+                    "Destination": destination_path,
+                    "Compressed": "Yes" if compress else "No"
+                }
+            )
         else:
-            print(f"{Colors.RED}Backup job failed.{Colors.RESET}")
-            return
+            MatrixUI.print_error(
+                "BACKUP FAILED",
+                f"Job '{job_id}' encountered an error",
+                actions=["Check the log file", "Verify remote connection", "Try running again"]
+            )
+        input("\nPress Enter to continue...")
+        return
 
     # Ask about cron scheduling
     if get_yes_no("Do you want to schedule this job with a cron job?"):
         schedule_cron(config[job_id], job_id)
-    else:
-        print("Skipping cron job setup.")
+    
+    input("\nPress Enter to continue...")
 
 
 def _configure_rclone_flags(job_id: str, default_flags: dict) -> dict:
     """
-    Configure rclone flags for the job.
-    
-    Args:
-        job_id: Job ID
-        default_flags: Dictionary with default flags
-    
-    Returns:
-        Dictionary with configured flags
+    Configure rclone flags for the job with Matrix UI.
     """
-    print("\nConfigure rclone flags for this job (Press Enter to use default values):")
+    print(f"{MatrixColors.MATRIX_GREEN}╔{'═' * 66}╗{MatrixColors.RESET}")
+    print(f"{MatrixColors.MATRIX_GREEN}║{MatrixColors.BOLD}{'RCLONE FLAGS CONFIGURATION'.center(66)}{MatrixColors.RESET}{MatrixColors.MATRIX_GREEN}║{MatrixColors.RESET}")
+    print(f"{MatrixColors.MATRIX_GREEN}╚{'═' * 66}╝{MatrixColors.RESET}\n")
+    
+    print(f"{MatrixColors.DIM}Press Enter to use default values{MatrixColors.RESET}\n")
     
     flags = default_flags.copy()
     flags["--log-file"] = f"{job_id}_rclone.log"
     
     for flag, value in flags.items():
         if flag == "--log-file":
-            continue  # Skip log-file, we set it automatically
+            continue
         
-        new_value = input(f"{flag} (default: {value}): ").strip()
+        new_value = input(f"{MatrixColors.MATRIX_GREEN}{flag}{MatrixColors.RESET} (default: {MatrixColors.CYBER_BLUE}{value}{MatrixColors.RESET}): ").strip()
         if new_value:
             flags[flag] = new_value
 
-    # Ask about --progress
-    if get_yes_no("Do you want to enable progress output (--progress)?"):
+    print()
+    if get_yes_no("Enable progress output (--progress)?"):
         flags["--progress"] = ""
 
     return flags

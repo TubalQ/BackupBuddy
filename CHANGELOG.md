@@ -91,6 +91,6 @@ All notable changes to BackupBuddy will be documented in this file.
 
 ## Version Naming
 
-- **2.x.x**: Matrix UI era
+- **2.0.0**: Matrix UI era
 - **0.1.0**: Initial modular version
 - **0.0.1**: Legacy monolithic script (deprecated)

@@ -14,20 +14,24 @@ from utils.display import Colors
 
 def check_and_install_dependencies() -> None:
     """
-    Check and install dependencies.
+    Check and install dependencies with Matrix UI.
     Always try to install rclone via curl, use apt as backup.
     """
+    from utils.matrix_ui import MatrixUI, MatrixColors
+    
     missing_dependencies = [dep for dep in DEPENDENCIES if not shutil.which(dep)]
 
     if not missing_dependencies and DEPENDENCY_FLAG_FILE.exists():
-        print("All dependencies are already installed.")
         return
 
-    print("\nInstalling missing dependencies...")
+    MatrixUI.clear_screen()
+    MatrixUI.print_header("DEPENDENCY CHECK", "Installing required tools")
+    
+    print(f"{MatrixColors.MATRIX_GREEN}⣾{MatrixColors.RESET} Checking dependencies...\n")
 
     # Install curl first if missing
     if "curl" in missing_dependencies:
-        print("curl not found. Installing curl...")
+        print(f"{MatrixColors.CYBER_BLUE}Installing curl...{MatrixColors.RESET}")
         _install_packages(["curl"])
         missing_dependencies.remove("curl")
 
@@ -40,6 +44,21 @@ def check_and_install_dependencies() -> None:
 
     # Verify installation
     _verify_dependencies()
+    
+    MatrixUI.print_success(
+        "DEPENDENCIES INSTALLED",
+        "All required tools are now available",
+        stats={
+            "curl": "✓",
+            "rclone": "✓", 
+            "pigz": "✓",
+            "tar": "✓",
+            "pv": "✓",
+            "cron": "✓"
+        }
+    )
+    
+    input("\nPress Enter to continue...")
 
 
 def _install_packages(packages: list) -> None:
